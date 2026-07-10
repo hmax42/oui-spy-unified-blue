@@ -23,14 +23,17 @@
 
 ## Which firmware — NODE vs MANAGER
 
-**One board? Flash NODE.** This is the answer for almost everyone.
+**One board? Flash NODE.**
 
 - **NODE** is the scanner. It runs the detection engines on its own WiFi + BLE radios and connects to the phone app directly. A single node is a complete, standalone OUI-SPY. The web flasher defaults to it.
 - **MANAGER** is only for a mesh of **2+ boards**. It is a coordinator: it links to the phone, splits work across nodes, and aggregates their detections — **it has no detection engines and does not scan itself.** A lone manager connects to the app but finds nothing. Flash a manager only when you have nodes for it to run.
 
-| You have… | Flash |
+> [!NOTE]
+> Supports several esp32 variants: the s3 is recommended. Visit the web flasher to see the complete list (feel free to request support for others)
+
+| Your Gear | Flash |
 |---|---|
-| **One board** | **NODE** (`node-xiao_s3`) |
+| **One board** | **NODE** `node-xiao_s3` |
 | **Several boards** | **NODE** on every board except the one you connect the app to; **MANAGER** on that one |
 
 ---
