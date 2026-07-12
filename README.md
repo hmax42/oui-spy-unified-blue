@@ -139,25 +139,7 @@ Routine updates come from the app over OTA. The web flasher is for the first fla
 
 **Web flasher** — [lukeswitz.github.io/oui-spy-unified-blue](https://lukeswitz.github.io/oui-spy-unified-blue/), Chrome / Edge 89+ (Web Serial). Plug in via USB-C, pick the target (NODE is the default), Connect & Flash.
 
-**Flash layout**
 
-| File | Offset |
-|---|---|
-| `bootloader.bin` | `0x0000` |
-| `partitions.bin` | `0x8000` |
-| `boot_app0.bin` | `0xe000` |
-| `firmware.bin` | `0x10000` |
-
-**Hardware — Seeed Studio XIAO ESP32-S3** (USB-C, 8 MB flash, BLE 5 + WiFi, dual-core 240 MHz):
-
-| Pin | Function |
-|---|---|
-| GPIO 3 | Piezo buzzer (PWM) |
-| GPIO 4 | NeoPixel WS2812B |
-| GPIO 21 | Onboard LED (active LOW) |
-| GPIO 43/44 | Optional hardware GPS TX/RX (else phone GPS is relayed) |
-
-Managers also run on **ESP32-S3 N16R8 DevKitC**, **XIAO ESP32-C3**, and **ESP32 WROOM**.
 
 <details>
 <summary><b>Build from source</b></summary>
