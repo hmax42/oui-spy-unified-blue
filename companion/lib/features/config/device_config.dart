@@ -3962,6 +3962,10 @@ class _DetectionRow extends ConsumerWidget {
                     ],
                   ),
                 ),
+                if ((data['authMode'] as int? ?? 0) > 0) ...[
+                  _ConfigAuthPill(authMode: data['authMode'] as int),
+                  const SizedBox(width: 10),
+                ],
                 // RSSI
                 Text('$rssi', style: TextStyle(
                   color: rssiColor, fontSize: 20,
@@ -4017,10 +4021,6 @@ class _DetectionRow extends ConsumerWidget {
                             color: t.textSecondary, fontSize: 12,
                             fontFamily: 'monospace', fontWeight: FontWeight.w600,
                           )),
-                        ],
-                        if ((data['authMode'] as int? ?? 0) > 0) ...[
-                          const SizedBox(width: 8),
-                          _ConfigAuthPill(authMode: data['authMode'] as int),
                         ],
                         if (!hasGps) ...[
                           const SizedBox(width: 8),
