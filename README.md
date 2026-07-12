@@ -23,14 +23,17 @@
 
 ## Which firmware — NODE vs MANAGER
 
-**One board? Flash NODE.** This is the answer for almost everyone.
+**One board? Flash NODE.**
 
 - **NODE** is the scanner. It runs the detection engines on its own WiFi + BLE radios and connects to the phone app directly. A single node is a complete, standalone OUI-SPY. The web flasher defaults to it.
 - **MANAGER** is only for a mesh of **2+ boards**. It is a coordinator: it links to the phone, splits work across nodes, and aggregates their detections — **it has no detection engines and does not scan itself.** A lone manager connects to the app but finds nothing. Flash a manager only when you have nodes for it to run.
 
-| You have… | Flash |
+> [!NOTE]
+> Supports several esp32 variants: the s3 is recommended. Visit the web flasher to see the complete list (feel free to request support for others)
+
+| Your Gear | Flash |
 |---|---|
-| **One board** | **NODE** (`node-xiao_s3`) |
+| **One board** | **NODE** `node-xiao_s3` |
 | **Several boards** | **NODE** on every board except the one you connect the app to; **MANAGER** on that one |
 
 ---
@@ -136,25 +139,7 @@ Routine updates come from the app over OTA. The web flasher is for the first fla
 
 **Web flasher** — [lukeswitz.github.io/oui-spy-unified-blue](https://lukeswitz.github.io/oui-spy-unified-blue/), Chrome / Edge 89+ (Web Serial). Plug in via USB-C, pick the target (NODE is the default), Connect & Flash.
 
-**Flash layout**
 
-| File | Offset |
-|---|---|
-| `bootloader.bin` | `0x0000` |
-| `partitions.bin` | `0x8000` |
-| `boot_app0.bin` | `0xe000` |
-| `firmware.bin` | `0x10000` |
-
-**Hardware — Seeed Studio XIAO ESP32-S3** (USB-C, 8 MB flash, BLE 5 + WiFi, dual-core 240 MHz):
-
-| Pin | Function |
-|---|---|
-| GPIO 3 | Piezo buzzer (PWM) |
-| GPIO 4 | NeoPixel WS2812B |
-| GPIO 21 | Onboard LED (active LOW) |
-| GPIO 43/44 | Optional hardware GPS TX/RX (else phone GPS is relayed) |
-
-Managers also run on **ESP32-S3 N16R8 DevKitC**, **XIAO ESP32-C3**, and **ESP32 WROOM**.
 
 <details>
 <summary><b>Build from source</b></summary>
