@@ -530,6 +530,7 @@ static void wardriveStart(void) {
             vTaskDelay(pdMS_TO_TICKS(50));
         }
 
+#ifndef OUISPY_DUAL_BAND
         wifi_country_t country = {
             .cc = "JP",
             .schan = 1,
@@ -537,6 +538,7 @@ static void wardriveStart(void) {
             .policy = WIFI_COUNTRY_POLICY_MANUAL
         };
         esp_wifi_set_country(&country);
+#endif
 
         wifi_promiscuous_filter_t ctrl_filter = {
             .filter_mask = 0
