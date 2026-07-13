@@ -889,7 +889,10 @@ class _SpoolImportBannerState extends State<_SpoolImportBanner> {
     return Padding(
       padding: EdgeInsets.fromLTRB(widget.pad, widget.pad, widget.pad, 0),
       child: GestureDetector(
-        onTap: _dismiss,
+        onTap: () {
+          context.go('/feed');
+          _dismiss();
+        },
         child: _SpoolBanner(color: color, icon: icon, message: message),
       ),
     );

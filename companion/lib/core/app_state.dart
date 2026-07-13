@@ -583,6 +583,8 @@ class AppState extends ChangeNotifier {
 
   void _ingestOfflineDetection(Detection det) {
     if (det.sourceNodeId.isNotEmpty) _recordSeenNode(det.sourceNodeId);
+    (_uniqueMacsPerEngine[det.engine] ??= {}).add(det.macAddress);
+    lastDetectionTime[det.engine] = DateTime.now();
     _upsertDetection(det);
     _recordDroneTrack(det);
     notifyListeners();

@@ -454,6 +454,28 @@ class BleManager {
     return found;
   }
 
+  Future<BluetoothDevice?> _scanForRemoteId(String remoteId,
+      {Duration timeout = const Duration(seconds: 8)}) async {
+    final completer = Completer<BluetoothDevice?>();
+    final sub = scanResults.listen((results) {
+      for (final r in results) {
+        if (r.device.remoteId.toString() == remoteId && !completer.isCompleted) {
+          completer.complete(r.device);
+        }
+      }
+    });
+    try {
+      await startScan(timeout: timeout);
+    } on Exception catch (e) {
+      DebugLog.log('BLE: reconnect scan error $e');
+    }
+    final found = await completer.future
+        .timeout(timeout + const Duration(seconds: 2), onTimeout: () => null);
+    await sub.cancel();
+    await stopScan();
+    return found;
+  }
+
   Future<bool> connectAndReady(BluetoothDevice device,
       {Duration timeout = const Duration(seconds: 25)}) async {
     final completer = Completer<bool>();
@@ -1583,9 +1605,12 @@ class BleManager {
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(delay, () async {
       if (_device == null || _userInitiatedDisconnect) return;
+      final target = _device!;
+      final found = await _scanForRemoteId(target.remoteId.toString());
+      if (_device == null || _userInitiatedDisconnect) return;
       _isReconnect = true;
       try {
-        await connect(_device!, sessionId: _sessionId);
+        await connect(found ?? target, sessionId: _sessionId);
       } catch (e) {
         DebugLog.log('BLE: reconnect attempt failed: $e');
       }

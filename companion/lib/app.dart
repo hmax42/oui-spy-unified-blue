@@ -222,20 +222,17 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _currentIndex = 0;
-
   static const _routes = ['/home', '/feed', '/wardrive', '/config'];
 
   @override
   Widget build(BuildContext context) {
+    final location = GoRouterState.of(context).uri.path;
+    final index = _routes.indexOf(location);
     return Scaffold(
       body: widget.child,
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() => _currentIndex = index);
-          context.go(_routes[index]);
-        },
+        currentIndex: index < 0 ? 0 : index,
+        onTap: (i) => context.go(_routes[i]),
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
