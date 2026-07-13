@@ -612,6 +612,7 @@ class WardriveController extends ChangeNotifier {
   }
 
   Future<void> startSession() async {
+    if (isActive) return;
     if (selectedTargets.isEmpty) {
       DebugLog.log('WARDRIVE: start ignored — no targets selected');
       return;
@@ -1624,7 +1625,6 @@ class WardriveController extends ChangeNotifier {
         if (jumpKm.isFinite && jumpKm > 0.5) {
           // >500m jump — likely stale position or GPS glitch, skip route point
           DebugLog.log('WARDRIVE: GPS jump ${(jumpKm * 1000).round()}m, skipping route point');
-          lastGpsForDistance = pos;
           notifyListeners();
           return;
         }

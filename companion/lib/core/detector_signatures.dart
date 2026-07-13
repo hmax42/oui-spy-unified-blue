@@ -8,7 +8,8 @@ const int sigDeauth = 0x04;
 const int sigProbe = 0x08;
 const int sigPwnagotchi = 0x10;
 const int sigGlasses = 0x20;
-const int sigAll = 0x3F;
+const int sigAxon = 0x40;
+const int sigAll = 0x7F;
 
 class DetectorSignature {
   final int bit;
@@ -32,6 +33,8 @@ const List<DetectorSignature> detectorSignatures = [
       'Pwnagotchi handshake-harvester beacons'),
   DetectorSignature(sigGlasses, 'Meta glasses', 'Meta glasses', Icons.visibility,
       'Meta Ray-Ban / smart glasses (BLE, visible at power-on/pairing)'),
+  DetectorSignature(sigAxon, 'Axon (Law Enforcement)', 'Axon', Icons.local_police,
+      'Axon Enterprise hardware — Taser, body cameras, Signal (BLE + promiscuous WiFi OUI 00:25:DF)'),
 ];
 
 class DetectorSigMaskNotifier extends StateNotifier<int> {

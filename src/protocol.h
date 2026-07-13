@@ -151,6 +151,7 @@ enum EngineState : uint8_t {
 #define METHOD_DET_PROBE       5
 #define METHOD_DET_PWNAGOTCHI  6
 #define METHOD_DET_GLASSES     7
+#define METHOD_DET_AXON        8
 
 #define SIG_TRACKER    0x01
 #define SIG_FLIPPER    0x02
@@ -158,7 +159,8 @@ enum EngineState : uint8_t {
 #define SIG_PROBE      0x08
 #define SIG_PWNAGOTCHI 0x10
 #define SIG_GLASSES    0x20
-#define SIG_ALL        0x3F
+#define SIG_AXON       0x40
+#define SIG_ALL        0x7F
 
 // ============================================================================
 // Detection Event — produced by engines, consumed by GATT notification task

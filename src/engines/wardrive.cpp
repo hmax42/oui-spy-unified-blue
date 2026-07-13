@@ -31,6 +31,12 @@ static uint8_t channelStart = 1;
 static uint8_t channelEnd   = 11;
 static unsigned long lastChannelHop = 0;
 
+#ifdef OUISPY_DUAL_BAND
+static const uint8_t kDualBandChannels[] = {
+    1, 6, 11, 36, 40, 44, 48, 149, 153, 157, 161, 165
+};
+#endif
+
 static uint16_t priorityDwellMs = 350;
 static uint16_t normalDwellMs   = 150;
 
@@ -56,11 +62,19 @@ static uint16_t scanDwellForChannel(uint8_t ch) {
 
 static void buildHopSchedule(void) {
     hopScheduleLen = 0;
+#ifdef OUISPY_DUAL_BAND
+    for (uint8_t i = 0; i < sizeof(kDualBandChannels) && hopScheduleLen < 32; i++) {
+        hopSchedule[hopScheduleLen] = kDualBandChannels[i];
+        hopDwellMs[hopScheduleLen] = scanDwellForChannel(kDualBandChannels[i]);
+        hopScheduleLen++;
+    }
+#else
     for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < 32; c++) {
         hopSchedule[hopScheduleLen] = (uint8_t)c;
         hopDwellMs[hopScheduleLen] = scanDwellForChannel((uint8_t)c);
         hopScheduleLen++;
     }
+#endif
     const uint8_t kPri[3] = {1, 6, 11};
     for (uint8_t i = 0; i < 3 && hopScheduleLen < 32; i++) {
         if (kPri[i] >= channelStart && kPri[i] <= channelEnd) {
@@ -698,13 +712,17 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
         bleScanDurationMs = payload[5] | (payload[6] << 8);
         bleScanIntervalMs = payload[7] | (payload[8] << 8);
         if (bleScanDurationMs < 100) bleScanDurationMs = 100;
-        if (bleScanIntervalMs < bleScanDurationMs + 100) bleScanIntervalMs = bleScanDurationMs + 100;
+        uint32_t minInterval = (uint32_t)bleScanDurationMs + 100;
+        if (minInterval > 0xFFFF) minInterval = 0xFFFF;
+        if (bleScanIntervalMs < minInterval) bleScanIntervalMs = (uint16_t)minInterval;
     }
     if (len >= 11) {
         uint8_t cs = payload[9];
         uint8_t ce = payload[10];
-        if (cs >= 1 && cs <= 14) channelStart = cs;
-        if (ce >= channelStart && ce <= 14) channelEnd = ce;
+        if (cs >= 1 && cs <= 14 && ce >= cs && ce <= 14) {
+            channelStart = cs;
+            channelEnd = ce;
+        }
     }
 
     if (wardriveActive && newRadio != prevRadio) {

@@ -21,10 +21,13 @@ static volatile int g_count = 0;
 static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static void IRAM_ATTR wifiCoexDispatch(void* buf, wifi_promiscuous_pkt_type_t type) {
+    WifiRxParser local[WIFI_COEX_MAX];
+    portENTER_CRITICAL_ISR(&g_mux);
     int n = g_count;
+    for (int i = 0; i < n; i++) local[i] = g_parsers[i];
+    portEXIT_CRITICAL_ISR(&g_mux);
     for (int i = 0; i < n; i++) {
-        WifiRxParser p = g_parsers[i];
-        if (p) p(buf, type);
+        if (local[i]) local[i](buf, type);
     }
 }
 

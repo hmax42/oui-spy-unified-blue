@@ -19,6 +19,8 @@ static volatile int currentRssi = -100;
 static volatile unsigned long lastTargetSeen = 0;
 static volatile bool targetInRange = false;
 static unsigned long lastBeepTime = 0;
+static bool beepOn = false;
+static unsigned long beepOffAt = 0;
 
 // WiFi promiscuous — scan all channels 1-14.
 // Channel hint from feed = start channel + extra dwell (priority), not a lock.
@@ -264,6 +266,12 @@ static void foxhunterStart(void) {
 static void foxhunterStop(void) {
     scanning = false;
 
+    if (beepOn) {
+        ledcWrite(0, 0);
+        ledcDetachPin(PIN_BUZZER);
+        beepOn = false;
+    }
+
     if (wifiActive) {
         wifiActive = false;
         wifiCoexUnregister(wifiSnifferCb);
@@ -282,17 +290,25 @@ static void foxhunterStop(void) {
     Serial.println("[FOXHUNTER] Stopped");
 }
 
+static void foxhunterBeepService(void) {
+    if (beepOn && (long)(millis() - beepOffAt) >= 0) {
+        ledcWrite(0, 0);
+        ledcDetachPin(PIN_BUZZER);
+        beepOn = false;
+    }
+}
+
 static void foxhunterProximityBeep(void) {
     if (!hwBuzzerEnabled || hwBuzzerVolume == 0) return;
     ledcSetup(0, 2400, 8);
     ledcAttachPin(PIN_BUZZER, 0);
     ledcWrite(0, hwBuzzerVolume);
-    delay(30);
-    ledcWrite(0, 0);
-    ledcDetachPin(PIN_BUZZER);
+    beepOn = true;
+    beepOffAt = millis() + 30;
 }
 
 static void foxhunterLoop(void) {
+    foxhunterBeepService();
     if (meshIsEnabled() && meshInMeshWindow()) return;
     if (!scanning) return;
 

@@ -88,7 +88,7 @@ class IgnoreEntry {
 
 class IgnoreListState extends ChangeNotifier {
   IgnoreListState() {
-    _load();
+    _loadFuture = _load();
   }
 
   static const _prefsKey = 'privacy_ignore_list';
@@ -96,42 +96,47 @@ class IgnoreListState extends ChangeNotifier {
 
   final List<IgnoreEntry> _entries = [];
   final Map<int, String> _ouiHexCache = {};
+  late final Future<void> _loadFuture;
   void Function()? onChanged;
   List<IgnoreEntry> get entries => List.unmodifiable(_entries);
 
-  void add(IgnoreEntry entry) {
+  Future<void> add(IgnoreEntry entry) async {
+    await _loadFuture;
     if (_entries.contains(entry)) return;
     _entries.add(entry);
     _rebuildOuiCache();
     notifyListeners();
-    _save();
+    await _save();
   }
 
-  void remove(IgnoreEntry entry) {
+  Future<void> remove(IgnoreEntry entry) async {
+    await _loadFuture;
     _entries.remove(entry);
     _rebuildOuiCache();
     notifyListeners();
-    _save();
+    await _save();
   }
 
-  void toggleEnabled(IgnoreEntry entry, {required bool enabled}) {
+  Future<void> toggleEnabled(IgnoreEntry entry, {required bool enabled}) async {
+    await _loadFuture;
     final idx = _entries.indexOf(entry);
     if (idx == -1) return;
     _entries[idx].enabled = enabled;
     notifyListeners();
-    _save();
+    await _save();
   }
 
-  void updateEntry(IgnoreEntry entry, {
+  Future<void> updateEntry(IgnoreEntry entry, {
     String? label,
     IgnoreScope? scope,
-  }) {
+  }) async {
+    await _loadFuture;
     final idx = _entries.indexOf(entry);
     if (idx == -1) return;
     if (label != null) _entries[idx].label = label;
     if (scope != null) _entries[idx].scope = scope;
     notifyListeners();
-    _save();
+    await _save();
   }
 
   bool shouldSuppress({

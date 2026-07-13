@@ -59,3 +59,8 @@ companion/macos/Flutter/GeneratedPluginRegistrant.swift
 
 # personal Claude project rules (not shared)
 CLAUDE.local.md
+
+# C5 pioarduino build artifacts
+get-platformio.py
+src/idf_component.yml
+src/idf_component.yml.orig

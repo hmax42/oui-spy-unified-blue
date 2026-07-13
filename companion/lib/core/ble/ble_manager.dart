@@ -528,6 +528,11 @@ class BleManager {
       timeout: const Duration(seconds: 15),
     );
     DebugLog.log('BLE: connected');
+    if (_userInitiatedDisconnect || _device != device) {
+      DebugLog.log('BLE: disconnect requested during connect — aborting');
+      await device.disconnect();
+      return;
+    }
 
     _subscriptions.add(
       device.connectionState.listen((state) {
@@ -1498,6 +1503,7 @@ class BleManager {
         _spoolImport.add(SpoolImportProgress(seen: _importSeen, total: _importTotal, dropped: _importDropped, done: true, aborted: false));
         return;
       }
+      if (data.length < 14) return;
       final detection = BleProtocol.decodeDetection(
         data,
         sessionId: _sessionId,
@@ -1513,6 +1519,7 @@ class BleManager {
       _noteAway(detection);
       return;
     }
+    if (data.length < 14) return;
     final isAway = data.isNotEmpty && (data[0] & 0x80) != 0;
     final detection = BleProtocol.decodeDetection(
       data,

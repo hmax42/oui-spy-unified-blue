@@ -198,15 +198,21 @@ class SkySkyBLECallback : public NimBLEAdvertisedDeviceCallbacks {
     void onResult(NimBLEAdvertisedDevice* dev) override {
         g_engRawSeen++;
         ODID_UAS_Data& UAS_data = UAS_data_ble;
+#ifdef OUISPY_NIMBLE2
+        const std::vector<uint8_t>& _pl = dev->getPayload();
+        int len = (int)_pl.size();
+        const uint8_t* payload = _pl.data();
+#else
         int len = dev->getPayloadLength();
         uint8_t* payload = dev->getPayload();
+#endif
         if (!payload || len < 6 + (int)sizeof(ODID_BasicID_encoded)) return;
 
         // ODID BLE signature: 0x16 0xFA 0xFF 0x0D
         if (payload[1] != 0x16 || payload[2] != 0xFA ||
             payload[3] != 0xFF || payload[4] != 0x0D) return;
 
-        uint8_t* odid = &payload[6];
+        uint8_t* odid = const_cast<uint8_t*>(&payload[6]);
         int odidLen = len - 6;
 
         memset(&UAS_data, 0, sizeof(UAS_data));

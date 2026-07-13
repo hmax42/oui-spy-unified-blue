@@ -1348,7 +1348,11 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
               ),
               alignment: Alignment.center,
               child: Icon(
-                isDetector ? Icons.radar : Icons.videocam,
+                isDetector
+                    ? Icons.radar
+                    : OuiLookupService.isLawEnforcement(d.macAddress)
+                        ? Icons.local_police
+                        : Icons.videocam,
                 size: pinHead * 0.58,
                 color: Colors.white,
               ),

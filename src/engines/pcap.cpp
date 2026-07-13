@@ -266,8 +266,14 @@ class PcapBleCallbacks : public NimBLEAdvertisedDeviceCallbacks {
         uint8_t addrType = dev->getAddressType();
         int8_t  rssi = (int8_t)dev->getRSSI();
 
+#ifdef OUISPY_NIMBLE2
+        const std::vector<uint8_t>& _pl = dev->getPayload();
+        const uint8_t* payload = _pl.data();
+        size_t payLen = _pl.size();
+#else
         uint8_t* payload = dev->getPayload();
         size_t payLen = dev->getPayloadLength();
+#endif
         uint8_t advLen = dev->getAdvLength();
         if (advLen > payLen) advLen = payLen;
         uint8_t scanLen = (uint8_t)((payLen > advLen) ? (payLen - advLen) : 0);

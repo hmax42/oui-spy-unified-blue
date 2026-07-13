@@ -103,7 +103,11 @@ class LiveActivityService {
 
   /// End the current Live Activity.
   Future<void> end() async {
-    if (!_supported || _activityId == null) return;
+    if (!_supported) return;
+    if (_activityId == null && _startInFlight != null) {
+      _activityId = await _startInFlight;
+    }
+    if (_activityId == null) return;
 
     try {
       await _channel.invokeMethod('endActivity', {

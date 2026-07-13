@@ -68,9 +68,24 @@ class OuiLookupService extends ChangeNotifier {
     'EC6260': 'Flock Safety (Raven)',
   };
 
+  static const Map<String, String> lawEnforcementOuis = {
+    '0025DF': 'Axon (Law Enforcement)',
+  };
+
   final Map<String, String> _db = {};
   bool _loaded = false;
   DateTime? _lastUpdated;
+
+  static String? _prefixOf(String mac) {
+    final clean = mac.replaceAll(RegExp(r'[:\-.]'), '').toUpperCase();
+    if (clean.length < 6) return null;
+    return clean.substring(0, 6);
+  }
+
+  static bool isLawEnforcement(String mac) {
+    final prefix = _prefixOf(mac);
+    return prefix != null && lawEnforcementOuis.containsKey(prefix);
+  }
 
   bool get isLoaded => _loaded;
   int get entryCount => _db.length;
@@ -102,6 +117,8 @@ class OuiLookupService extends ChangeNotifier {
   String? lookup(String macAddress) {
     final prefix = _extractPrefix(macAddress);
     if (prefix == null) return null;
+    final le = lawEnforcementOuis[prefix];
+    if (le != null) return le;
     final override = _overrides[prefix];
     final dbVendor = _loaded ? _db[prefix] : null;
     if (override != null) {
@@ -182,12 +199,7 @@ class OuiLookupService extends ChangeNotifier {
   }
 
   /// Extract 6-char hex prefix from MAC string.
-  String? _extractPrefix(String mac) {
-    // Strip separators
-    final clean = mac.replaceAll(RegExp(r'[:\-.]'), '').toUpperCase();
-    if (clean.length < 6) return null;
-    return clean.substring(0, 6);
-  }
+  String? _extractPrefix(String mac) => _prefixOf(mac);
 
   Future<File> get _localFile async {
     final dir = await getApplicationSupportDirectory();

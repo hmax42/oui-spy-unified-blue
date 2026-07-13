@@ -63,50 +63,56 @@ class WatchlistEntry {
 
 class WatchlistState extends ChangeNotifier {
   WatchlistState() {
-    _load();
+    _loadFuture = _load();
   }
 
   static const _prefsKey = 'watchlist_entries_v1';
 
   final List<WatchlistEntry> entries = [];
   bool _loaded = false;
+  late final Future<void> _loadFuture;
   bool get isLoaded => _loaded;
 
   List<WatchlistEntry> get enabledEntries =>
       entries.where((e) => e.enabled).toList();
 
-  void toggleEnabled(WatchlistEntry entry, {required bool enabled}) {
+  Future<void> toggleEnabled(WatchlistEntry entry, {required bool enabled}) async {
+    await _loadFuture;
     final idx = entries.indexOf(entry);
     if (idx == -1) return;
     entries[idx].enabled = enabled;
     notifyListeners();
-    _save();
+    await _save();
   }
 
-  void add(WatchlistEntry entry) {
+  Future<void> add(WatchlistEntry entry) async {
+    await _loadFuture;
     entries.add(entry);
     notifyListeners();
-    _save();
+    await _save();
   }
 
-  void remove(WatchlistEntry entry) {
+  Future<void> remove(WatchlistEntry entry) async {
+    await _loadFuture;
     entries.remove(entry);
     notifyListeners();
-    _save();
+    await _save();
   }
 
-  void clear() {
+  Future<void> clear() async {
+    await _loadFuture;
     entries.clear();
     notifyListeners();
-    _save();
+    await _save();
   }
 
-  void replaceAll(Iterable<WatchlistEntry> next) {
+  Future<void> replaceAll(Iterable<WatchlistEntry> next) async {
+    await _loadFuture;
     entries
       ..clear()
       ..addAll(next);
     notifyListeners();
-    _save();
+    await _save();
   }
 
   Future<void> _load() async {

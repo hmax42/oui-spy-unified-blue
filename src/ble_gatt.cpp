@@ -1734,9 +1734,15 @@ static void dfuNotifyTrampoline(const uint8_t* data, size_t len) {
 static volatile bool     pcapIndInFlight = false;
 static volatile uint32_t pcapIndSentMs   = 0;
 class PcapDataCallbacks : public NimBLECharacteristicCallbacks {
+#ifdef OUISPY_NIMBLE2
+    void onStatus(NimBLECharacteristic* /*chr*/, int /*code*/) override {
+        pcapIndInFlight = false;
+    }
+#else
     void onStatus(NimBLECharacteristic* /*chr*/, Status /*s*/, int /*code*/) override {
         pcapIndInFlight = false;
     }
+#endif
 };
 static PcapDataCallbacks pcapDataCallbacks;
 
@@ -1916,11 +1922,11 @@ void mgrPcapReasmAdd(const char* src, uint16_t seq,
     }
     memcpy(pcapReasm[slot].buf + off, data, dataLen);
     pcapReasm[slot].recv_mask |= (1u << idx);
-    if (idx > pcapReasm[slot].highest_idx) pcapReasm[slot].highest_idx = idx;
-    if (isLast) {
-        pcapReasm[slot].last_seen = true;
+    if (idx >= pcapReasm[slot].highest_idx) {
+        pcapReasm[slot].highest_idx = idx;
         pcapReasm[slot].total_len = (uint16_t)(off + dataLen);
     }
+    if (isLast) pcapReasm[slot].last_seen = true;
     if (pcapReasm[slot].last_seen) {
         const uint8_t expected = pcapReasm[slot].highest_idx + 1;
         const uint32_t fullMask = (expected >= 32) ? 0xFFFFFFFFu
@@ -2036,7 +2042,9 @@ void bleGattStreamPcapBytes(const uint8_t* buf, size_t len) {
     }
 #endif
     if (!phoneConnected || chrPcapData == nullptr) return;
+#ifndef OUISPY_NIMBLE2
     if (chrPcapData->getSubscribedCount() == 0) return;
+#endif
     size_t chunk = 180;
     if (pServer != nullptr) {
         auto peers = pServer->getPeerDevices();
@@ -2317,7 +2325,9 @@ void bleGattInit(void) {
 
     NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
     adv->addServiceUUID(SVC_UUID);
+#ifndef OUISPY_NIMBLE2
     adv->setScanResponse(true);
+#endif
     adv->start();
 
     Serial.println("[BLE] GATT server started, advertising as OUI-SPY");

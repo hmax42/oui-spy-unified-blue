@@ -43,6 +43,9 @@ static DedupRing<32, 3000> dedup;
 static DedupRingISR<32, 3000> wifiDedupISR;
 static DedupRing<32, 10000> sigDedup;
 static DedupRingISR<32, 8000> probeDedup;
+static DedupRingISR<16, 8000> axonDedupISR;
+
+static const uint8_t AXON_OUI[3] = {0x00, 0x25, 0xdf};
 
 static volatile unsigned long deauthWindowStart = 0;
 static volatile uint16_t deauthCount = 0;
@@ -195,6 +198,22 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
                           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi);
         }
     }
+    if (sigMask & SIG_AXON) {
+        if (memcmp(mac, AXON_OUI, 3) == 0) {
+            if (sigDedup.check(mac)) return;
+            DetectionEvent evt = {};
+            evt.engine_id = ENGINE_DETECTOR;
+            memcpy(evt.mac, mac, 6);
+            evt.rssi = rssi;
+            evt.timestamp_ms = millis();
+            evt.method = METHOD_DET_AXON;
+            strncpy(evt.ext.detector.filter_desc, "Axon (Law Enforcement)",
+                    sizeof(evt.ext.detector.filter_desc) - 1);
+            pushDetection(&evt);
+            Serial.printf("[DETECTOR] SIG %02x:%02x:%02x:%02x:%02x:%02x RSSI:%d [Axon LE]\n",
+                          mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi);
+        }
+    }
 }
 
 class DetectorCallback : public NimBLEAdvertisedDeviceCallbacks {
@@ -294,6 +313,23 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
             evt.timestamp_ms = now;
             evt.method = METHOD_DET_PWNAGOTCHI;
             strncpy(evt.ext.detector.filter_desc, "Pwnagotchi",
+                    sizeof(evt.ext.detector.filter_desc) - 1);
+            pushDetectionFromISR(&evt);
+        }
+        return;
+    }
+
+    if (sigMask & SIG_AXON) {
+        const uint8_t* src = &p[10];
+        if (memcmp(src, AXON_OUI, 3) == 0 && !axonDedupISR.check(src)) {
+            DetectionEvent evt = {};
+            evt.engine_id = ENGINE_DETECTOR;
+            memcpy(evt.mac, src, 6);
+            evt.rssi = pkt->rx_ctrl.rssi;
+            evt.channel = pkt->rx_ctrl.channel;
+            evt.timestamp_ms = millis();
+            evt.method = METHOD_DET_AXON;
+            strncpy(evt.ext.detector.filter_desc, "Axon (Law Enforcement)",
                     sizeof(evt.ext.detector.filter_desc) - 1);
             pushDetectionFromISR(&evt);
         }
@@ -466,7 +502,7 @@ void detectorSetFilters(const uint8_t* data, size_t len) {
 }
 
 void detectorSetSigMask(uint8_t mask) {
-    const uint8_t wifiBits = SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI;
+    const uint8_t wifiBits = SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON;
     bool prevWifi = (sigMask & wifiBits) != 0;
     sigMask = mask;
     bool newWifi = (sigMask & wifiBits) != 0;
@@ -480,7 +516,7 @@ uint8_t detectorGetSigMask(void) { return sigMask; }
 
 bool detectorUsesWifi(void) {
     return (detectorRadioMask & 0x01) != 0 &&
-           (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI)) != 0;
+           (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON)) != 0;
 }
 
 static void detectorInit(void) {
@@ -496,7 +532,7 @@ static void detectorStart(void) {
     bool wardriveOwns = (engineGetState(ENGINE_WARDRIVE) != ESTATE_DISABLED);
     bool wantBle  = (detectorRadioMask & 0x02) != 0;
     bool wantWifi = (detectorRadioMask & 0x01) != 0 &&
-                    (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI)) != 0;
+                    (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON)) != 0;
 
     if (!wardriveOwns && wantBle) {
         bleScan = NimBLEDevice::getScan();
@@ -573,7 +609,7 @@ void detectorHostSuspend(bool suspend) {
             bleCoexRegister(&scanCb, true);
         }
         if ((detectorRadioMask & 0x01) &&
-            (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI))) {
+            (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON))) {
             if (!meshIsEnabled()) WiFi.mode(WIFI_STA);
             wifiSnifferApplyPs();
             wifiCoexRegister(wifiSnifferCb, WIFI_PROMIS_FILTER_MASK_MGMT);

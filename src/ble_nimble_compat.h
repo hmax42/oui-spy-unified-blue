@@ -1,0 +1,43 @@
+#ifndef BLE_NIMBLE_COMPAT_H
+#define BLE_NIMBLE_COMPAT_H
+
+#if defined(OUISPY_NIMBLE2) && defined(__cplusplus)
+#include <Arduino.h>
+#include <esp_mac.h>
+#include <NimBLEDevice.h>
+
+class NimBLEAdvertisedDeviceCallbacks : public NimBLEScanCallbacks {
+ public:
+  virtual void onResult(NimBLEAdvertisedDevice* dev) {}
+  void onResult(const NimBLEAdvertisedDevice* dev) override {
+    onResult(const_cast<NimBLEAdvertisedDevice*>(dev));
+  }
+};
+
+class OuispyCharacteristicCallbacks : public NimBLECharacteristicCallbacks {
+ public:
+  virtual void onWrite(NimBLECharacteristic* c) {}
+  virtual void onRead(NimBLECharacteristic* c) {}
+  void onWrite(NimBLECharacteristic* c, NimBLEConnInfo&) override { onWrite(c); }
+  void onRead(NimBLECharacteristic* c, NimBLEConnInfo&) override { onRead(c); }
+};
+
+class OuispyServerCallbacks : public NimBLEServerCallbacks {
+ public:
+  virtual void onConnect(NimBLEServer* s) {}
+  virtual void onDisconnect(NimBLEServer* s) {}
+  void onConnect(NimBLEServer* s, NimBLEConnInfo&) override { onConnect(s); }
+  void onDisconnect(NimBLEServer* s, NimBLEConnInfo&, int) override { onDisconnect(s); }
+};
+
+#define NimBLECharacteristicCallbacks OuispyCharacteristicCallbacks
+#define NimBLEServerCallbacks OuispyServerCallbacks
+#define setAdvertisedDeviceCallbacks setScanCallbacks
+#define getNative getVal
+#define ledcSetup(ch, freq, res) ledcAttach(PIN_BUZZER, (freq), (res))
+#define ledcAttachPin(pin, ch) ((void)0)
+#define ledcWrite(ch, duty) ledcWrite(PIN_BUZZER, (duty))
+#define ledcDetachPin(pin) ledcDetach(pin)
+#endif
+
+#endif

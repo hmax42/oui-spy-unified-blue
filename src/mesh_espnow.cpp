@@ -20,6 +20,7 @@ volatile MeshStatus meshCurrentStatus = {};
 static mbedtls_gcm_context gcmCtx;
 static bool gcmReady = false;
 static uint64_t txCounter = 0;
+static uint32_t g_meshSessionSalt = 0;
 static char localNodeId[MESH_NODE_ID_LEN] = {};
 static volatile bool g_mgrPhoneConnected = false;
 static volatile uint32_t g_mgrPhoneSeenMs = 0;
@@ -322,7 +323,9 @@ size_t meshGetLiveNodes(MeshLiveNode* out, size_t maxOut, uint32_t ttl_ms) {
 
 static void deriveNonce(uint8_t nonce[MESH_NONCE_LEN], uint64_t counter) {
     memcpy(nonce, localNodeId, 4);
-    memcpy(nonce + 4, &counter, 8);
+    memcpy(nonce + 4, &g_meshSessionSalt, 4);
+    uint32_t c = (uint32_t)counter;
+    memcpy(nonce + 8, &c, 4);
 }
 
 static bool encryptPacket(const uint8_t* plain, size_t plainLen,
@@ -924,6 +927,9 @@ static void meshProcessRxPacket(const uint8_t* macAddr, const uint8_t* data, int
         if (memcmp(wp.source_node_id, localNodeId, MESH_NODE_ID_LEN) == 0) return;
         if (s_wifiOtaApplied) return;
         size_t n = wp.len; if (n > MESH_WIFIOTA_MAX) n = MESH_WIFIOTA_MAX;
+        size_t availOta = c > offsetof(MeshWifiOtaPacket, data)
+                            ? c - offsetof(MeshWifiOtaPacket, data) : 0;
+        if (n > availOta) n = availOta;
         size_t off = 0;
         char ssid[33] = {0}, pass[65] = {0}, url[MESH_WIFIOTA_MAX + 1] = {0};
         if (off >= n) return;
@@ -953,6 +959,9 @@ static void meshProcessRxPacket(const uint8_t* macAddr, const uint8_t* data, int
         MeshOtaDataPacket d;
         size_t c = plainLen <= sizeof(d) ? plainLen : sizeof(d);
         memcpy(&d, plainBuf, c);
+        size_t availChunk = c > offsetof(MeshOtaDataPacket, payload)
+                              ? c - offsetof(MeshOtaDataPacket, payload) : 0;
+        if (d.len > availChunk) d.len = (uint8_t)availChunk;
         otaRxData(&d); return;
     }
     if (plainLen == sizeof(MeshOtaEndPacket) && plainBuf[0] == MESH_PKT_OTA_END) {
@@ -996,6 +1005,9 @@ static void meshProcessRxPacket(const uint8_t* macAddr, const uint8_t* data, int
         memcpy(&raw, plainBuf, copyLen);
         if (memcmp(raw.source_node_id, localNodeId, MESH_NODE_ID_LEN) == 0) return;
         if (raw.payload_len > MESH_RAW_PAYLOAD_MAX) return;
+        size_t availRaw = copyLen > offsetof(MeshRawNotifyPacket, payload)
+                            ? copyLen - offsetof(MeshRawNotifyPacket, payload) : 0;
+        if (raw.payload_len > availRaw) return;
         bleGattDispatchMeshNotify(raw.kind, raw.source_node_id,
                                   raw.seq, raw.payload, raw.payload_len);
         if (xSemaphoreTake(meshMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
@@ -1057,6 +1069,7 @@ static void meshProcessRxPacket(const uint8_t* macAddr, const uint8_t* data, int
         return;
     }
 
+    if (plainBuf[0] < 0x20) return;
     if (plainLen < sizeof(MeshDetectionPacket)) {
         static unsigned long lastMismatchLog = 0;
         if (plainLen >= MESH_NODE_ID_LEN && millis() - lastMismatchLog > 3000) {
@@ -1133,7 +1146,12 @@ static void meshRxWorkerFn(void* arg) {
 }
 #endif
 
+#ifdef OUISPY_NIMBLE2
+static void onEspNowRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
+    const uint8_t* macAddr = info ? info->src_addr : nullptr;
+#else
 static void onEspNowRecv(const uint8_t* macAddr, const uint8_t* data, int len) {
+#endif
     if (!meshCurrentConfig.enabled) return;
     if (len <= 0 || len > MESH_TX_MAX_LEN) return;
 #ifdef OUISPY_ROLE_MANAGER
@@ -1154,7 +1172,11 @@ static void onEspNowRecv(const uint8_t* macAddr, const uint8_t* data, int len) {
 #endif
 }
 
+#ifdef OUISPY_NIMBLE2
+static void onEspNowSend(const wifi_tx_info_t* macAddr, esp_now_send_status_t status) {
+#else
 static void onEspNowSend(const uint8_t* macAddr, esp_now_send_status_t status) {
+#endif
     (void)macAddr;
     (void)status;
 }
@@ -1424,6 +1446,7 @@ void meshEnableEx(const MeshConfig* cfg, bool sendInvite) {
     }
 
     txCounter = 0;
+    g_meshSessionSalt = esp_random();
 
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(false, false);
@@ -1511,6 +1534,7 @@ void meshDisable(void) {
 
     gcmReady = false;
     txCounter = 0;
+    g_meshSessionSalt = esp_random();
 
     Serial.println("[MESH] Disabled");
 }

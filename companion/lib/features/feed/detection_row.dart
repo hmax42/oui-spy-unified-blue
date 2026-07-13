@@ -806,6 +806,10 @@ class _DetailLine extends StatelessWidget {
       size: 13,
       color: engine.color,
     ));
+    if (OuiLookupService.isLawEnforcement(detection.macAddress)) {
+      tokens.add(const SizedBox(width: 5));
+      tokens.add(const Icon(Icons.local_police, size: 13, color: AppTheme.warning));
+    }
     final isGenericMethod =
         detection.method == 'wifi_ap' || detection.method == 'ble_adv';
     final discovery = methodLabel(detection.method);

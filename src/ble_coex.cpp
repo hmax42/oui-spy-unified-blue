@@ -11,10 +11,13 @@ static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 class BleCoexDispatch : public NimBLEAdvertisedDeviceCallbacks {
   public:
     void onResult(NimBLEAdvertisedDevice* dev) override {
+        NimBLEAdvertisedDeviceCallbacks* local[BLE_COEX_MAX];
+        portENTER_CRITICAL(&g_mux);
         int n = g_count;
+        for (int i = 0; i < n; i++) local[i] = g_cbs[i];
+        portEXIT_CRITICAL(&g_mux);
         for (int i = 0; i < n; i++) {
-            NimBLEAdvertisedDeviceCallbacks* c = g_cbs[i];
-            if (c) c->onResult(dev);
+            if (local[i]) local[i]->onResult(dev);
         }
     }
 };
@@ -52,7 +55,11 @@ void bleCoexEnsureScanning(void) {
     s->setActiveScan(g_wantActive);
     s->setInterval(100);
     s->setWindow(99);
+#ifdef OUISPY_NIMBLE2
+    s->start(0, false, false);
+#else
     s->start(0, nullptr, false);
+#endif
 }
 
 void bleCoexUnregister(NimBLEAdvertisedDeviceCallbacks* cb) {
