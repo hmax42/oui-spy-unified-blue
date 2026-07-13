@@ -40,6 +40,10 @@
   #define OUISPY_LED_INIT()  neopixelWrite(PIN_NEOPIXEL, 0, 0, 0)
   #define OUISPY_LED_ON()    ((void)0)
   #define OUISPY_LED_OFF()   neopixelWrite(PIN_NEOPIXEL, 0, 0, 0)
+#elif defined(OUISPY_LED_ACTIVE_HIGH)
+  #define OUISPY_LED_INIT()  do { pinMode(PIN_LED, OUTPUT); digitalWrite(PIN_LED, LOW); } while (0)
+  #define OUISPY_LED_ON()    digitalWrite(PIN_LED, HIGH)
+  #define OUISPY_LED_OFF()   digitalWrite(PIN_LED, LOW)
 #else
   #define OUISPY_LED_INIT()  do { pinMode(PIN_LED, OUTPUT); digitalWrite(PIN_LED, HIGH); } while (0)
   #define OUISPY_LED_ON()    digitalWrite(PIN_LED, LOW)
