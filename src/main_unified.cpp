@@ -33,6 +33,8 @@
 #include "engines/unipwn.h"
 #include "engines/wardrive.h"
 #include "engines/pcap.h"
+#include <TinyGPS++.h>
+#include <HardwareSerial.h>
 
 #ifdef OUISPY_RGB_DARK
   #define OUISPY_LED_INIT()  neopixelWrite(PIN_NEOPIXEL, 0, 0, 0)
@@ -51,6 +53,51 @@ QueueHandle_t detectionQueue = NULL;
 QueueHandle_t engineCmdQueue = NULL;
 volatile GpsData currentGps = {};
 volatile bool gpsValid = false;
+
+static TinyGPSPlus hwGps;
+static HardwareSerial hwGpsSerial(1);
+static bool hwGpsStarted = false;
+static bool hwGpsFix = false;
+static unsigned long hwGpsLastChar = 0;
+
+void hwGpsInit(void) {
+    hwGpsSerial.begin(9600, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
+    hwGpsStarted = true;
+    Serial.printf("[HW-GPS] init RX=%d TX=%d @9600 (optional module)\n",
+                  PIN_GPS_RX, PIN_GPS_TX);
+}
+
+bool hwGpsActive(void) { return hwGpsFix; }
+
+void hwGpsPoll(void) {
+    if (!hwGpsStarted) return;
+    while (hwGpsSerial.available()) {
+        hwGps.encode(hwGpsSerial.read());
+        hwGpsLastChar = millis();
+    }
+    if (hwGpsFix && millis() - hwGpsLastChar > 5000) {
+        hwGpsFix = false;
+        Serial.println("[HW-GPS] no data 5s — releasing to phone GPS");
+    }
+    if (hwGps.location.isUpdated() && hwGps.location.isValid()) {
+        GpsData g = {};
+        g.latitude  = hwGps.location.lat();
+        g.longitude = hwGps.location.lng();
+        g.altitude  = hwGps.altitude.isValid() ? (float)hwGps.altitude.meters() : 0.0f;
+        g.speed     = hwGps.speed.isValid()    ? (float)hwGps.speed.mps()        : 0.0f;
+        g.heading   = hwGps.course.isValid()   ? (float)hwGps.course.deg()        : 0.0f;
+        g.accuracy  = hwGps.hdop.isValid()     ? (float)(hwGps.hdop.hdop() * 5.0) : 10.0f;
+        g.satellite_count = hwGps.satellites.isValid() ? (uint8_t)hwGps.satellites.value() : 0;
+        g.timestamp_ms = millis();
+        memcpy((void*)&currentGps, &g, sizeof(GpsData));
+        gpsValid = true;
+        if (!hwGpsFix) {
+            Serial.printf("[HW-GPS] fix sats=%u %.6f,%.6f\n",
+                          g.satellite_count, g.latitude, g.longitude);
+        }
+        hwGpsFix = true;
+    }
+}
 
 // Hardware config — loaded from NVS at boot, updated live by BLE writes
 volatile bool    hwBuzzerEnabled = true;
@@ -1060,6 +1107,7 @@ void setup() {
     Serial.printf("[INIT] Active mask after boot disable: 0x%02X\n", engineGetActiveMask());
 
     // Initialize mesh subsystem
+    hwGpsInit();
     meshInit();
 
     bleGattInit();
@@ -1174,6 +1222,7 @@ void setup() {
 // Arduino Loop
 // ============================================================================
 void loop() {
+    hwGpsPoll();
     // Run all active engine loops
     engineLoopAll();
 

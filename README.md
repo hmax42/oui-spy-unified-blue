@@ -139,6 +139,17 @@ Routine updates come from the app over OTA. The web flasher is for the first fla
 
 **Web flasher** — [lukeswitz.github.io/oui-spy-unified-blue](https://lukeswitz.github.io/oui-spy-unified-blue/), Chrome / Edge 89+ (Web Serial). Plug in via USB-C, pick the target (NODE is the default), Connect & Flash.
 
+**Optional on-board GPS** — a node normally gets location from the phone over BLE. Wire a serial GPS module (NEO-6M / NEO-8M, 9600 baud) and the node self-locates with no phone — useful for standalone / offline wardriving. When the module has a fix it takes priority over phone GPS; unplug it and the node falls back to the phone automatically (5 s timeout).
+
+| GPS module | Board (XIAO ESP32-S3 default) |
+|---|---|
+| TX  | GPIO44 (`PIN_GPS_RX`) |
+| RX  | GPIO43 (`PIN_GPS_TX`) |
+| VCC | 3V3 |
+| GND | GND |
+
+Pins are per-board — override with `-DPIN_GPS_RX=` / `-DPIN_GPS_TX=` for other variants. Serial detections (`lat`/`lon`/`sats`) print on the module's first fix.
+
 
 
 <details>

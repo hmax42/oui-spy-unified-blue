@@ -47,6 +47,11 @@ static bool scanning = false;
 static unsigned long lastScanStart = 0;
 static uint8_t skyspyRadioMask = 0x03;
 static const uint8_t SKYSPY_WIFI_CH = 6;
+#ifdef OUISPY_DUAL_BAND
+static const uint8_t SKYSPY_DUAL_CH[] = {6, 149, 153, 157, 161, 165};
+static uint8_t skyspyDualIdx = 0;
+static unsigned long skyspyDualHop = 0;
+#endif
 
 static DroneData* findOrAllocDrone(uint8_t* mac) {
     for (int i = 0; i < MAX_UAVS; i++) {
@@ -389,11 +394,19 @@ static void skyspyLoop(void) {
     if (!scanning) return;
 
     if ((skyspyRadioMask & 0x01) && wifiCoexShouldHop(ENGINE_SKYSPY)) {
+#ifdef OUISPY_DUAL_BAND
+        if (millis() - skyspyDualHop >= 50) {
+            skyspyDualIdx = (skyspyDualIdx + 1) % (uint8_t)sizeof(SKYSPY_DUAL_CH);
+            esp_wifi_set_channel(SKYSPY_DUAL_CH[skyspyDualIdx], WIFI_SECOND_CHAN_NONE);
+            skyspyDualHop = millis();
+        }
+#else
         uint8_t pri = 0;
         wifi_second_chan_t sec = WIFI_SECOND_CHAN_NONE;
         if (esp_wifi_get_channel(&pri, &sec) == ESP_OK && pri != SKYSPY_WIFI_CH) {
             esp_wifi_set_channel(SKYSPY_WIFI_CH, WIFI_SECOND_CHAN_NONE);
         }
+#endif
     }
 
     if ((skyspyRadioMask & 0x02) &&

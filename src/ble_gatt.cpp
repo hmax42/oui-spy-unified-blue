@@ -1059,6 +1059,8 @@ class EngineControlCallbacks : public NimBLECharacteristicCallbacks {
     }
 };
 
+extern bool hwGpsActive(void);
+
 class GpsReceiveCallbacks : public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic* chr) override {
         std::string val = chr->getValue();
@@ -1066,8 +1068,10 @@ class GpsReceiveCallbacks : public NimBLECharacteristicCallbacks {
 
         GpsData gps;
         memcpy(&gps, val.data(), sizeof(GpsData));
-        memcpy((void*)&currentGps, &gps, sizeof(GpsData));
-        gpsValid = true;
+        if (!hwGpsActive()) {
+            memcpy((void*)&currentGps, &gps, sizeof(GpsData));
+            gpsValid = true;
+        }
 
         if (val.length() > sizeof(GpsData)) {
             hwAlertsSuppressed = ((const uint8_t*)val.data())[sizeof(GpsData)] != 0;
