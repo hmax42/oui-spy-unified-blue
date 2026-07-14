@@ -2379,7 +2379,7 @@ class _WardriveConfigTabState extends ConsumerState<_WardriveConfigTab> {
         Padding(
           padding: const EdgeInsets.only(bottom: 10, left: 2),
           child: Text(
-            'Aggregated across every session saved in this app — your on-device capture data, not your linked accounts.',
+            'Counts below are from this app\'s own wardrive sessions only.',
             style: TextStyle(color: t.textDim, fontSize: 11),
           ),
         ),
@@ -2437,6 +2437,8 @@ class _CollectionStatsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final oui = ref.watch(ouiLookupProvider);
+    final wigle = ref.watch(wigleProvider);
+    final wdg = ref.watch(wdgwarsProvider);
 
     final vendorCounts = <String, int>{};
     for (final e in stats.ouiCounts) {
@@ -2490,7 +2492,6 @@ class _CollectionStatsView extends ConsumerWidget {
               },
               band: '5 GHz',
               color: AppTheme.skySpy,
-              rotateLabels: true,
             ),
           ],
           const SizedBox(height: 18),
@@ -2531,6 +2532,34 @@ class _CollectionStatsView extends ConsumerWidget {
                   ),
                 ));
           }(),
+        ],
+
+        if ((wigle.isLoggedIn && wigle.stats != null) ||
+            (wdg.isLoggedIn && wdg.stats != null)) ...[
+          const SizedBox(height: 18),
+          _StatBlockLabel('LINKED PLATFORM TOTALS', Icons.cloud_done),
+          const SizedBox(height: 2),
+          Builder(builder: (context) {
+            final t = AppTheme.of(context);
+            return Text(
+              'Lifetime networks on your account — all devices, not just this app.',
+              style: TextStyle(color: t.textDim, fontSize: 10),
+            );
+          }),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (wigle.isLoggedIn && wigle.stats != null)
+                _MiniStatTile(icon: Icons.language, label: 'WIGLE',
+                    value: _fmt(wigle.stats!.totalDiscovered),
+                    color: AppTheme.wigle),
+              if (wdg.isLoggedIn && wdg.stats != null)
+                _MiniStatTile(icon: Icons.sports_esports, label: 'WDGWARS',
+                    value: _fmt(wdg.stats!.total), color: AppTheme.wdgwars),
+            ],
+          ),
         ],
       ],
     );
@@ -2705,12 +2734,10 @@ class _ChannelChart extends StatelessWidget {
     required this.counts,
     required this.band,
     required this.color,
-    this.rotateLabels = false,
   });
   final Map<int, int> counts;
   final String band;
   final Color color;
-  final bool rotateLabels;
 
   @override
   Widget build(BuildContext context) {
@@ -2718,9 +2745,6 @@ class _ChannelChart extends StatelessWidget {
     if (counts.isEmpty) return const SizedBox.shrink();
     final entries = counts.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
     final maxV = entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
-    final labelStyle = TextStyle(
-      color: t.textSecondary, fontSize: 8, fontFamily: 'monospace',
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2731,23 +2755,24 @@ class _ChannelChart extends StatelessWidget {
         )),
         const SizedBox(height: 4),
         SizedBox(
-          height: rotateLabels ? 82 : 64,
+          height: 64,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: entries.map((e) {
               final f = maxV == 0 ? 0.0 : (e.value / maxV).clamp(0.06, 1.0);
               return Expanded(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: rotateLabels ? 1.0 : 1.5),
+                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Text(
-                        _CollectionStatsView._fmt(e.value),
-                        style: TextStyle(color: t.textDim, fontSize: 7,
-                            fontFamily: 'monospace'),
-                        maxLines: 1,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          _CollectionStatsView._fmt(e.value),
+                          style: TextStyle(color: t.textDim, fontSize: 8,
+                              fontFamily: 'monospace'),
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Container(
@@ -2759,18 +2784,13 @@ class _ChannelChart extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 3),
-                      if (rotateLabels)
-                        SizedBox(
-                          height: 26,
-                          child: RotatedBox(
-                            quarterTurns: 3,
-                            child: Text('${e.key}', maxLines: 1,
-                                softWrap: false, overflow: TextOverflow.visible,
-                                style: labelStyle),
-                          ),
-                        )
-                      else
-                        Text('${e.key}', style: labelStyle),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('${e.key}', style: TextStyle(
+                          color: t.textSecondary, fontSize: 8,
+                          fontFamily: 'monospace',
+                        )),
+                      ),
                     ],
                   ),
                 ),
