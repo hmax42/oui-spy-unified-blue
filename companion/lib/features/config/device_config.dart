@@ -2437,8 +2437,6 @@ class _CollectionStatsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final oui = ref.watch(ouiLookupProvider);
-    final wigle = ref.watch(wigleProvider);
-    final wdg = ref.watch(wdgwarsProvider);
 
     final vendorCounts = <String, int>{};
     for (final e in stats.ouiCounts) {
@@ -2448,6 +2446,16 @@ class _CollectionStatsView extends ConsumerWidget {
     final topVendors = vendorCounts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final vendors = topVendors.take(12).toList();
+
+    final flockVendorCounts = <String, int>{};
+    for (final e in stats.flockOuiCounts) {
+      final name = oui.lookup('${e.key}:00:00:00') ?? 'Unknown';
+      flockVendorCounts[name] = (flockVendorCounts[name] ?? 0) + e.value;
+    }
+    final flockVendors = (flockVendorCounts.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value)))
+        .take(8)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2517,6 +2525,25 @@ class _CollectionStatsView extends ConsumerWidget {
           const SizedBox(height: 18),
         ],
 
+        if (flockVendors.isNotEmpty) ...[
+          _StatBlockLabel('TOP FLOCK VENDORS', Icons.videocam),
+          const SizedBox(height: 8),
+          ...() {
+            final maxV = flockVendors.first.value;
+            return flockVendors.map((e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: _BarRow(
+                    label: e.key,
+                    value: e.value,
+                    max: maxV,
+                    color: AppTheme.flockBle,
+                    labelAbove: true,
+                  ),
+                ));
+          }(),
+          const SizedBox(height: 18),
+        ],
+
         if (stats.authCounts.isNotEmpty) ...[
           _StatBlockLabel('ENCRYPTION', Icons.lock_outline),
           const SizedBox(height: 8),
@@ -2536,33 +2563,6 @@ class _CollectionStatsView extends ConsumerWidget {
           }(),
         ],
 
-        if ((wigle.isLoggedIn && wigle.stats != null) ||
-            (wdg.isLoggedIn && wdg.stats != null)) ...[
-          const SizedBox(height: 18),
-          _StatBlockLabel('LINKED PLATFORM TOTALS', Icons.cloud_done),
-          const SizedBox(height: 2),
-          Builder(builder: (context) {
-            final t = AppTheme.of(context);
-            return Text(
-              'Lifetime networks on your account — all devices, not just this app.',
-              style: TextStyle(color: t.textDim, fontSize: 10),
-            );
-          }),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (wigle.isLoggedIn && wigle.stats != null)
-                _MiniStatTile(icon: Icons.language, label: 'WIGLE',
-                    value: _fmt(wigle.stats!.totalDiscovered),
-                    color: AppTheme.wigle),
-              if (wdg.isLoggedIn && wdg.stats != null)
-                _MiniStatTile(icon: Icons.sports_esports, label: 'WDGWARS',
-                    value: _fmt(wdg.stats!.total), color: AppTheme.wdgwars),
-            ],
-          ),
-        ],
       ],
     );
   }

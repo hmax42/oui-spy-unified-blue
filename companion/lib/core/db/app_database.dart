@@ -21,6 +21,7 @@ class CollectionStats {
     required this.channelCounts,
     required this.authCounts,
     required this.ouiCounts,
+    required this.flockOuiCounts,
   });
 
   final int totalUnique;
@@ -32,6 +33,7 @@ class CollectionStats {
   final Map<int, int> channelCounts;
   final Map<int, int> authCounts;
   final List<MapEntry<String, int>> ouiCounts;
+  final List<MapEntry<String, int>> flockOuiCounts;
 
   bool get isEmpty => totalUnique == 0;
 }
@@ -288,6 +290,12 @@ class AppDatabase extends _$AppDatabase {
       "FROM detections WHERE mac_address != '' GROUP BY oui ORDER BY c DESC LIMIT 300",
     ).get();
 
+    final flockOuiRows = await customSelect(
+      "SELECT UPPER(SUBSTR(mac_address,1,8)) AS oui, COUNT(DISTINCT mac_address) AS c "
+      "FROM detections WHERE engine IN ('flockBle','flockWifi') AND mac_address != '' "
+      "GROUP BY oui ORDER BY c DESC LIMIT 80",
+    ).get();
+
     return CollectionStats(
       totalUnique: totals.read<int>('total_unique'),
       wifiUnique: totals.read<int>('wifi_unique'),
@@ -303,6 +311,10 @@ class AppDatabase extends _$AppDatabase {
       },
       ouiCounts: [
         for (final r in ouiRows) MapEntry(r.read<String>('oui'), r.read<int>('c')),
+      ],
+      flockOuiCounts: [
+        for (final r in flockOuiRows)
+          MapEntry(r.read<String>('oui'), r.read<int>('c')),
       ],
     );
   }
