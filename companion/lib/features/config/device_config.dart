@@ -2761,10 +2761,12 @@ class _ChannelChart extends StatelessWidget {
                       const SizedBox(height: 3),
                       if (rotateLabels)
                         SizedBox(
-                          height: 24,
-                          child: Transform.rotate(
-                            angle: -0.9,
-                            child: Text('${e.key}', maxLines: 1, style: labelStyle),
+                          height: 26,
+                          child: RotatedBox(
+                            quarterTurns: 3,
+                            child: Text('${e.key}', maxLines: 1,
+                                softWrap: false, overflow: TextOverflow.visible,
+                                style: labelStyle),
                           ),
                         )
                       else

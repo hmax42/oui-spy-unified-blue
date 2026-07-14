@@ -3833,15 +3833,18 @@ class _SessionRow extends ConsumerWidget {
                 },
               ),
             );
-            final distText = SizedBox(
-              width: 48,
-              child: Text(
-                UnitFormatter.distance(session.distanceKm, units),
-                style: TextStyle(
-                  color: t.textDim, fontSize: 10,
-                  fontFamily: 'monospace',
+            final distText = Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: SizedBox(
+                width: 66,
+                child: Text(
+                  UnitFormatter.distance(session.distanceKm, units),
+                  style: TextStyle(
+                    color: t.textDim, fontSize: 10,
+                    fontFamily: 'monospace',
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
             );
             final flockStat = SizedBox(
