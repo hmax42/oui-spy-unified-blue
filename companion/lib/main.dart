@@ -176,8 +176,10 @@ Future<void> _autoConnect(ProviderContainer container) async {
             return;
           }
           if (lastPrimaryId != null && id == lastPrimaryId) {
-            preferredDevice = r.device;
-            DebugLog.log('AUTO: lastPrimary node (used only if no manager): $name/$advName');
+            DebugLog.log('AUTO: lastPrimary match — connecting now: $name/$advName');
+            FlutterBluePlus.stopScan();
+            if (!completer.isCompleted) completer.complete(r.device);
+            return;
           } else {
             preferredDevice ??= r.device;
             DebugLog.log('AUTO: node MATCH (fallback): $name/$advName');

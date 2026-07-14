@@ -905,7 +905,7 @@ String _spoolBreakdown(Map<String, int> byEngine) {
     'flockBle': 'flock',
     'flockWifi': 'flock',
     'skySpy': 'drone',
-    'detector': 'watchlist',
+    'detector': 'detector',
     'wardrive': 'wardrive',
     'foxhunter': 'foxhunt',
   };
