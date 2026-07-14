@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/features/pcap/pcap_stats.dart';
@@ -791,6 +792,12 @@ class _SavedPcapsSectionState extends State<_SavedPcapsSection> {
             Text('SAVED CAPTURES',
                 style: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 2)),
             const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.open_in_full, size: 18),
+              color: t.textDim,
+              tooltip: 'Open capture library',
+              onPressed: () => context.push('/pcap/library'),
+            ),
             IconButton(
               icon: const Icon(Icons.refresh, size: 18),
               color: t.textDim,
