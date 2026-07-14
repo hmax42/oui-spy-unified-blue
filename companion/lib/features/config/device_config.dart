@@ -313,11 +313,23 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
         const _ScanTimingSliders(),
 
         const SizedBox(height: 16),
+        const ConfigSectionHeader(label: 'WIFI BAND'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8, left: 2),
+          child: Text(
+            '5GHz needs a dual-band node (ESP32-C5). 5GHz sweeps UNII-1 + UNII-3; '
+            'applies to all WiFi engines.',
+            style: TextStyle(color: t.textDim, fontSize: 11),
+          ),
+        ),
+        const _WifiBandSelector(),
+
+        const SizedBox(height: 16),
         const ConfigSectionHeader(label: 'CHANNEL RANGE'),
         Padding(
           padding: const EdgeInsets.only(bottom: 8, left: 2),
           child: Text(
-            'WiFi channels to scan. Narrower range = faster per-channel coverage.',
+            '2.4GHz channels to scan. Narrower range = faster per-channel coverage.',
             style: TextStyle(color: t.textDim, fontSize: 11),
           ),
         ),
@@ -943,6 +955,18 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
           icon: Icons.numbers, label: 'Version', value: _fwVersion,
         ),
         ConfigInfoRow(
+          icon: Icons.developer_board,
+          label: 'Board',
+          value: switch (ref.read(bleManagerProvider).board) {
+            'xiao_s3' => 'XIAO ESP32-S3',
+            's3_devkitc' => 'ESP32-S3 DevKitC',
+            'xiao_c5' => 'XIAO ESP32-C5 (2.4+5GHz)',
+            'xiao_c3' => 'XIAO ESP32-C3',
+            'wroom' => 'ESP32 WROOM',
+            final b => b.isEmpty ? '—' : b,
+          },
+        ),
+        ConfigInfoRow(
           icon: Icons.fingerprint,
           label: isMgr ? 'Manager ID' : 'Node ID',
           value: _nodeId,
@@ -1278,6 +1302,29 @@ class _ChannelRangeSlider extends ConsumerWidget {
           onUp: () => ref.read(wardriveProvider).channelEnd = wd.channelEnd + 1,
         ),
       ],
+    );
+  }
+}
+
+class _WifiBandSelector extends ConsumerWidget {
+  const _WifiBandSelector();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final wd = ref.watch(wardriveProvider);
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<WifiBand>(
+        segments: const [
+          ButtonSegment(value: WifiBand.band24, label: Text('2.4 GHz')),
+          ButtonSegment(value: WifiBand.band5, label: Text('5 GHz')),
+          ButtonSegment(value: WifiBand.both, label: Text('Both')),
+        ],
+        selected: {wd.wifiBand},
+        showSelectedIcon: false,
+        onSelectionChanged: (s) =>
+            ref.read(wardriveProvider).wifiBand = s.first,
+      ),
     );
   }
 }

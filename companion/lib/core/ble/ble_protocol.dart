@@ -173,6 +173,12 @@ class BleProtocol {
     return Uint8List.fromList([0x10, engine.index, ...payload]);
   }
 
+  /// Encode global WiFi band select. action[1]=0x1A engine_id[1]=0 (ignored)
+  /// mask[1]: bit0=2.4GHz, bit1=5GHz. Applies to all WiFi engines.
+  static Uint8List encodeWifiBand(int mask) {
+    return Uint8List.fromList([0x1A, 0x00, mask & 0x03]);
+  }
+
   /// Decode engine control status.
   /// available[1] active[1] states[6]
   static ({int available, int active, List<EngineState> states}) decodeEngineStatus(

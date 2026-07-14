@@ -128,6 +128,10 @@ Future<void> reconcileDanglingWardriveSessions(AppDatabase db) async {
   }
 }
 
+/// Global WiFi band select. On dual-band (C5) nodes: 2.4GHz only, 5GHz only,
+/// or both. On single-band nodes the 5GHz bit is a no-op.
+enum WifiBand { band24, band5, both }
+
 class WardriveController extends ChangeNotifier {
   WardriveController(this._ble, this._gps, this._db, this._ignoreList, this._geofenceFilter, this._notificationService, this._liveActivity) {
     _connSub = _ble.connectionState.listen((connState) {
@@ -135,6 +139,7 @@ class WardriveController extends ChangeNotifier {
         SharedPreferences.getInstance().then(
             (p) => offlineGpsTag = p.getBool('offlineGpsTagEnabled') ?? false);
         _adoptFirmwareState();
+        _pushWifiBand();
       }
     });
     _importedDetSub = _ble.importedDetections.listen(_onImportedDetection);
@@ -158,6 +163,9 @@ class WardriveController extends ChangeNotifier {
     _bleScanInterval = p.getInt('wd_bleScanInterval') ?? 3000;
     _channelStart = p.getInt('wd_channelStart') ?? 1;
     _channelEnd = p.getInt('wd_channelEnd') ?? 11;
+    _wifiBand = WifiBand.values[
+        (p.getInt('wd_wifiBand') ?? WifiBand.both.index)
+            .clamp(0, WifiBand.values.length - 1)];
     radio = radioFromMask(p.getInt('wd_radio') ?? 0x03);
     final savedTargets = p.getStringList('wd_targets');
     if (savedTargets != null) {
@@ -190,6 +198,7 @@ class WardriveController extends ChangeNotifier {
     p.setInt('wd_bleScanInterval', _bleScanInterval);
     p.setInt('wd_channelStart', _channelStart);
     p.setInt('wd_channelEnd', _channelEnd);
+    p.setInt('wd_wifiBand', _wifiBand.index);
     p.setInt('wd_radio', radioBitmask);
     p.setStringList('wd_targets', selectedTargets.map((t) => t.name).toList());
   }
@@ -283,6 +292,15 @@ class WardriveController extends ChangeNotifier {
   int get channelEnd => _channelEnd;
   set channelEnd(int v) { _channelEnd = v.clamp(_channelStart, 14); notifyListeners(); _savePrefs(); _pushWardriveConfigLive(); }
 
+  WifiBand _wifiBand = WifiBand.both;
+  WifiBand get wifiBand => _wifiBand;
+  int get wifiBandMask => switch (_wifiBand) {
+        WifiBand.band24 => 0x01,
+        WifiBand.band5 => 0x02,
+        WifiBand.both => 0x03,
+      };
+  set wifiBand(WifiBand v) { _wifiBand = v; notifyListeners(); _savePrefs(); _pushWifiBand(); }
+
   Uint8List get _wardriveConfigPayload => Uint8List.fromList([
         radioBitmask,
         wifiScanInterval & 0xFF, (wifiScanInterval >> 8) & 0xFF,
@@ -297,6 +315,11 @@ class WardriveController extends ChangeNotifier {
     if (!isActive) return;
     if (!activeEngines.contains(Engine.wardrive)) return;
     _ble.sendEngineConfig(Engine.wardrive, _wardriveConfigPayload);
+  }
+
+  void _pushWifiBand() {
+    if (!isActive) return;
+    _ble.sendWifiBand(wifiBandMask);
   }
 
   double get markerDistanceM => _markerDistanceM;

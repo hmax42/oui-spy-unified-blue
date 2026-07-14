@@ -1071,6 +1071,12 @@ class BleManager {
     );
   }
 
+  /// Push the global WiFi band mask (bit0=2.4GHz, bit1=5GHz) to all WiFi engines.
+  Future<void> sendWifiBand(int mask) async {
+    if (_engineControl == null) return;
+    await _engineControl!.write(BleProtocol.encodeWifiBand(mask));
+  }
+
   Future<void> syncDetectorWatchlist(List<WatchlistEntry> entries) async {
     if (_detectorConfig == null) {
       DebugLog.log('BLE: detectorConfig char missing; skip watchlist sync');
