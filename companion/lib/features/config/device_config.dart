@@ -2510,6 +2510,7 @@ class _CollectionStatsView extends ConsumerWidget {
                     value: e.value,
                     max: maxV,
                     color: _heat(e.value, maxV),
+                    labelAbove: true,
                   ),
                 ));
           }(),
@@ -2672,16 +2673,69 @@ class _BarRow extends StatelessWidget {
     required this.value,
     required this.max,
     required this.color,
+    this.labelAbove = false,
   });
   final String label;
   final int value;
   final int max;
   final Color color;
+  final bool labelAbove;
 
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     final f = max == 0 ? 0.0 : (value / max).clamp(0.02, 1.0);
+    final bar = ClipRRect(
+      borderRadius: BorderRadius.circular(3),
+      child: Stack(
+        children: [
+          Container(height: 14, color: t.surface),
+          FractionallySizedBox(
+            widthFactor: f,
+            child: Container(
+              height: 14,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    final valueText = Text(
+      _CollectionStatsView._fmt(value),
+      textAlign: TextAlign.right,
+      style: TextStyle(
+        color: t.textPrimary, fontSize: 11,
+        fontFamily: 'monospace', fontWeight: FontWeight.w600,
+      ),
+    );
+
+    if (labelAbove) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(color: t.textSecondary, fontSize: 11),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              valueText,
+            ],
+          ),
+          const SizedBox(height: 3),
+          bar,
+        ],
+      );
+    }
+
     return Row(
       children: [
         SizedBox(
@@ -2693,38 +2747,9 @@ class _BarRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: Stack(
-              children: [
-                Container(height: 14, color: t.surface),
-                FractionallySizedBox(
-                  widthFactor: f,
-                  child: Container(
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        Expanded(child: bar),
         const SizedBox(width: 8),
-        SizedBox(
-          width: 44,
-          child: Text(
-            _CollectionStatsView._fmt(value),
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              color: t.textPrimary, fontSize: 11,
-              fontFamily: 'monospace', fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+        SizedBox(width: 44, child: valueText),
       ],
     );
   }
