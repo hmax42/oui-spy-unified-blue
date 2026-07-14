@@ -363,6 +363,7 @@ static void skyspyStart(void) {
         // MGMT only — ODID (NAN/Beacon) travels in mgmt frames; DATA/CTRL would
         // bury the callback in irrelevant traffic and miss drone beacons.
         wifiSnifferApplyPs();
+        wifiApplyRegdomain();
         wifiCoexRegister(wifiCallback, WIFI_PROMIS_FILTER_MASK_MGMT);
         esp_wifi_set_channel(SKYSPY_WIFI_CH, WIFI_SECOND_CHAN_NONE);
     }
@@ -396,7 +397,11 @@ static void skyspyLoop(void) {
     if ((skyspyRadioMask & 0x01) && wifiCoexShouldHop(ENGINE_SKYSPY)) {
 #ifdef OUISPY_DUAL_BAND
         if (millis() - skyspyDualHop >= 50) {
-            skyspyDualIdx = (skyspyDualIdx + 1) % (uint8_t)sizeof(SKYSPY_DUAL_CH);
+            int g = 0;
+            do {
+                skyspyDualIdx = (skyspyDualIdx + 1) % (uint8_t)sizeof(SKYSPY_DUAL_CH);
+            } while (!wifiChanEnabled(SKYSPY_DUAL_CH[skyspyDualIdx]) &&
+                     ++g < (int)sizeof(SKYSPY_DUAL_CH));
             esp_wifi_set_channel(SKYSPY_DUAL_CH[skyspyDualIdx], WIFI_SECOND_CHAN_NONE);
             skyspyDualHop = millis();
         }

@@ -64,12 +64,14 @@ static void buildHopSchedule(void) {
     hopScheduleLen = 0;
 #ifdef OUISPY_DUAL_BAND
     for (uint8_t i = 0; i < sizeof(kDualBandChannels) && hopScheduleLen < 32; i++) {
+        if (!wifiChanEnabled(kDualBandChannels[i])) continue;
         hopSchedule[hopScheduleLen] = kDualBandChannels[i];
         hopDwellMs[hopScheduleLen] = scanDwellForChannel(kDualBandChannels[i]);
         hopScheduleLen++;
     }
 #else
     for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < 32; c++) {
+        if (!wifiChanEnabled((uint8_t)c)) continue;
         hopSchedule[hopScheduleLen] = (uint8_t)c;
         hopDwellMs[hopScheduleLen] = scanDwellForChannel((uint8_t)c);
         hopScheduleLen++;
@@ -77,7 +79,7 @@ static void buildHopSchedule(void) {
 #endif
     const uint8_t kPri[3] = {1, 6, 11};
     for (uint8_t i = 0; i < 3 && hopScheduleLen < 32; i++) {
-        if (kPri[i] >= channelStart && kPri[i] <= channelEnd) {
+        if (kPri[i] >= channelStart && kPri[i] <= channelEnd && wifiChanEnabled(kPri[i])) {
             hopSchedule[hopScheduleLen] = kPri[i];
             hopDwellMs[hopScheduleLen] = scanDwellForChannel(kPri[i]);
             hopScheduleLen++;
@@ -530,15 +532,7 @@ static void wardriveStart(void) {
             vTaskDelay(pdMS_TO_TICKS(50));
         }
 
-#ifndef OUISPY_DUAL_BAND
-        wifi_country_t country = {
-            .cc = "JP",
-            .schan = 1,
-            .nchan = 14,
-            .policy = WIFI_COUNTRY_POLICY_MANUAL
-        };
-        esp_wifi_set_country(&country);
-#endif
+        wifiApplyRegdomain();
 
         wifi_promiscuous_filter_t ctrl_filter = {
             .filter_mask = 0

@@ -922,6 +922,10 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     }
 };
 
+#ifdef OUISPY_ROLE_MANAGER
+static void mgrCacheConfig(uint8_t kind, const uint8_t* data, size_t len);
+#endif
+
 class EngineControlCallbacks : public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic* chr) override {
         std::string val = chr->getValue();
@@ -1004,6 +1008,11 @@ class EngineControlCallbacks : public NimBLECharacteristicCallbacks {
             if (p[0] == 0x10 || p[0] == 0x11 || p[0] == 0x12) {
                 mgrAutoPcapSyncToNodes();
             }
+        }
+        if (cmd.command == ENGINE_CTRL_WIFI_BAND) {
+            uint8_t bm = (cmd.payload_len >= 1) ? cmd.payload[0] : 0x03;
+            mgrCacheConfig(MESH_CFG_KIND_WIFIBAND, &bm, 1);
+            if (meshIsEnabled()) meshBroadcastConfig(MESH_CFG_KIND_WIFIBAND, &bm, 1);
         }
         if (cmd.engine_id == ENGINE_WARDRIVE && cmd.command == 0x10) {
             if (cmd.payload_len >= 11) {
@@ -1158,6 +1167,7 @@ static uint8_t mgrAlertCfg[8] = {0}; static uint8_t mgrAlertCfgLen = 0;
 static uint8_t mgrApCfg[5]    = {0}; static uint8_t mgrApCfgLen = 0;
 static uint8_t mgrFoxCfg[7]   = {0}; static uint8_t mgrFoxCfgLen = 0;
 static uint8_t mgrSigCfg[1]   = {0}; static uint8_t mgrSigCfgLen = 0;
+static uint8_t mgrBandCfg[1]  = {0}; static uint8_t mgrBandCfgLen = 0;
 
 static void mgrCacheConfig(uint8_t kind, const uint8_t* data, size_t len) {
     if (kind == MESH_CFG_KIND_HW) {
@@ -1175,6 +1185,9 @@ static void mgrCacheConfig(uint8_t kind, const uint8_t* data, size_t len) {
     } else if (kind == MESH_CFG_KIND_SIGMASK) {
         mgrSigCfgLen = len > sizeof(mgrSigCfg) ? sizeof(mgrSigCfg) : (uint8_t)len;
         memcpy(mgrSigCfg, data, mgrSigCfgLen);
+    } else if (kind == MESH_CFG_KIND_WIFIBAND) {
+        mgrBandCfgLen = len > sizeof(mgrBandCfg) ? sizeof(mgrBandCfg) : (uint8_t)len;
+        memcpy(mgrBandCfg, data, mgrBandCfgLen);
     }
 }
 
@@ -1195,6 +1208,7 @@ void bleGattRebroadcastConfigs(void) {
     if (mgrApCfgLen)    meshBroadcastConfig(MESH_CFG_KIND_AUTOPCAP, mgrApCfg, mgrApCfgLen);
     if (mgrFoxCfgLen)   meshBroadcastConfig(MESH_CFG_KIND_FOXHUNTER, mgrFoxCfg, mgrFoxCfgLen);
     if (mgrSigCfgLen)   meshBroadcastConfig(MESH_CFG_KIND_SIGMASK, mgrSigCfg, mgrSigCfgLen);
+    if (mgrBandCfgLen)  meshBroadcastConfig(MESH_CFG_KIND_WIFIBAND, mgrBandCfg, mgrBandCfgLen);
 
     uint8_t m = mgrCommandedMask;
     if (m & ENGINE_BITMASK(ENGINE_FLOCK_WIFI)) mgrBroadcastNodeRadioConfig(ENGINE_FLOCK_WIFI);
@@ -2152,7 +2166,11 @@ void bleGattInit(void) {
         NimBLEDevice::init(devName);
         Serial.printf("[BLE] device name: %s\n", devName);
     }
+#ifdef OUISPY_DUAL_BAND
+    NimBLEDevice::setPower(ESP_PWR_LVL_P20);   // C5 radio TX ceiling (Bruce C5/C6/H2 tier)
+#else
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+#endif
     NimBLEDevice::setMTU(512);
 
     pServer = NimBLEDevice::createServer();

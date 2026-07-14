@@ -266,11 +266,15 @@ typedef struct __attribute__((packed)) {
 // Engine Command — from GATT write to engine task
 // ============================================================================
 typedef struct {
-    uint8_t  command;       // 0x01=enable, 0x00=disable, 0x10=config_update
+    uint8_t  command;       // 0x01=enable, 0x00=disable, 0x10=config_update, 0x1A=wifi_band
     uint8_t  engine_id;
     uint8_t  payload[64];
     uint8_t  payload_len;
 } EngineCommand;
+
+// Global WiFi band select (command 0x1A): payload[0] = WIFI_BAND_* bitmask
+// (bit0=2.4GHz, bit1=5GHz). engine_id ignored. Applies to all WiFi engines.
+#define ENGINE_CTRL_WIFI_BAND 0x1A
 
 // ============================================================================
 // Queues (extern, created in main.cpp)
@@ -473,6 +477,7 @@ typedef struct __attribute__((packed)) {
 #define MESH_CFG_KIND_FOXHUNTER 4
 #define MESH_CFG_KIND_ENGINE 5
 #define MESH_CFG_KIND_SIGMASK 6
+#define MESH_CFG_KIND_WIFIBAND 7   // data[0] = WIFI_BAND_* mask (bit0=2.4, bit1=5)
 #define MESH_CONFIG_MAX     32
 typedef struct __attribute__((packed)) {
     uint8_t  pkt_type;          // MESH_PKT_CONFIG

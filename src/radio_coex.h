@@ -10,3 +10,11 @@ bool wifiCoexActive(void);
 bool wifiCoexShouldHop(int engineId);
 
 void wifiSnifferApplyPs(void);
+
+#define WIFI_BAND_24 0x01
+#define WIFI_BAND_5  0x02
+
+void    wifiSetBandMask(uint8_t mask);
+uint8_t wifiGetBandMask(void);
+bool    wifiChanEnabled(uint8_t ch);
+void    wifiApplyRegdomain(void);

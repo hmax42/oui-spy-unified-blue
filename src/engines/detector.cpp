@@ -33,8 +33,15 @@ static const int SCAN_DURATION_S = 2;
 
 static volatile bool wifiActive = false;
 static uint8_t detectorRadioMask = 0x03;
+#ifdef OUISPY_DUAL_BAND
+static const uint8_t channels[] = {
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+    36, 40, 44, 48, 149, 153, 157, 161, 165
+};
+#else
 static const uint8_t channels[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
-static const int channelCount = 14;
+#endif
+static const int channelCount = sizeof(channels) / sizeof(channels[0]);
 static int channelIdx = 0;
 static unsigned long lastChannelHop = 0;
 static const unsigned long DWELL_MS = 120;
@@ -548,8 +555,11 @@ static void detectorStart(void) {
             WiFi.mode(WIFI_STA);
         }
         wifiSnifferApplyPs();
+        wifiApplyRegdomain();
         wifiCoexRegister(wifiSnifferCb, WIFI_PROMIS_FILTER_MASK_MGMT);
-        esp_wifi_set_channel(channels[0], WIFI_SECOND_CHAN_NONE);
+        channelIdx = 0;
+        while (channelIdx < channelCount - 1 && !wifiChanEnabled(channels[channelIdx])) channelIdx++;
+        esp_wifi_set_channel(channels[channelIdx], WIFI_SECOND_CHAN_NONE);
         lastChannelHop = millis();
         wifiActive = true;
     }
@@ -624,7 +634,10 @@ static void detectorLoop(void) {
 
     if (wifiActive && wifiCoexShouldHop(ENGINE_DETECTOR) &&
         millis() - lastChannelHop >= DWELL_MS) {
-        channelIdx = (channelIdx + 1) % channelCount;
+        int guard = 0;
+        do {
+            channelIdx = (channelIdx + 1) % channelCount;
+        } while (!wifiChanEnabled(channels[channelIdx]) && ++guard < channelCount);
         esp_wifi_set_channel(channels[channelIdx], WIFI_SECOND_CHAN_NONE);
         lastChannelHop = millis();
         if (meshIsEnabled() && channels[channelIdx] == 1) meshNoteOnHome();
