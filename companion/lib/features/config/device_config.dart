@@ -2492,6 +2492,7 @@ class _CollectionStatsView extends ConsumerWidget {
               },
               band: '5 GHz',
               color: AppTheme.skySpy,
+              angled: true,
             ),
           ],
           const SizedBox(height: 18),
@@ -2734,10 +2735,12 @@ class _ChannelChart extends StatelessWidget {
     required this.counts,
     required this.band,
     required this.color,
+    this.angled = false,
   });
   final Map<int, int> counts;
   final String band;
   final Color color;
+  final bool angled;
 
   @override
   Widget build(BuildContext context) {
@@ -2745,6 +2748,12 @@ class _ChannelChart extends StatelessWidget {
     if (counts.isEmpty) return const SizedBox.shrink();
     final entries = counts.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
     final maxV = entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+    final countStyle = TextStyle(
+      color: t.textDim, fontSize: 8, fontFamily: 'monospace',
+    );
+    final chStyle = TextStyle(
+      color: t.textSecondary, fontSize: 8, fontFamily: 'monospace',
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2755,25 +2764,25 @@ class _ChannelChart extends StatelessWidget {
         )),
         const SizedBox(height: 4),
         SizedBox(
-          height: 64,
+          height: angled ? 92 : 64,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: entries.map((e) {
               final f = maxV == 0 ? 0.0 : (e.value / maxV).clamp(0.06, 1.0);
               return Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                  padding: EdgeInsets.symmetric(horizontal: angled ? 1.0 : 1.5),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          _CollectionStatsView._fmt(e.value),
-                          style: TextStyle(color: t.textDim, fontSize: 8,
-                              fontFamily: 'monospace'),
+                      if (angled)
+                        _diag(_CollectionStatsView._fmt(e.value), countStyle)
+                      else
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                              _CollectionStatsView._fmt(e.value), style: countStyle),
                         ),
-                      ),
                       const SizedBox(height: 2),
                       Container(
                         height: 40 * f,
@@ -2784,13 +2793,10 @@ class _ChannelChart extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 3),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text('${e.key}', style: TextStyle(
-                          color: t.textSecondary, fontSize: 8,
-                          fontFamily: 'monospace',
-                        )),
-                      ),
+                      if (angled)
+                        _diag('${e.key}', chStyle)
+                      else
+                        Text('${e.key}', style: chStyle),
                     ],
                   ),
                 ),
@@ -2801,6 +2807,19 @@ class _ChannelChart extends StatelessWidget {
       ],
     );
   }
+
+  static Widget _diag(String s, TextStyle style) => SizedBox(
+        height: 20,
+        child: OverflowBox(
+          minWidth: 0,
+          maxWidth: 70,
+          alignment: Alignment.center,
+          child: Transform.rotate(
+            angle: -0.7,
+            child: Text(s, maxLines: 1, softWrap: false, style: style),
+          ),
+        ),
+      );
 }
 
 class _IgnoreListTab extends ConsumerWidget {
