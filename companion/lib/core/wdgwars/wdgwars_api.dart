@@ -155,7 +155,7 @@ class WdgwarsUploadResult {
   String get summary {
     if (async) return 'Queued for WDGWars processing';
     final parts = <String>[];
-    if (accepted != null) parts.add('$accepted networks');
+    if (accepted != null) parts.add('$accepted records');
     if (newNetworks != null) parts.add('$newNetworks new');
     if (mergedSamples != null) parts.add('$mergedSamples merged');
     return parts.isEmpty ? 'Uploaded to WDGWars' : parts.join(' · ');
