@@ -27,6 +27,7 @@ import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/drone_grouping.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/core/wigle/wigle_provider.dart';
+import 'package:oui_spy/core/wdgwars/wdgwars_provider.dart';
 import 'package:oui_spy/features/feed/detection_row.dart';
 import 'package:oui_spy/features/wardrive/drone_markers.dart';
 import 'package:oui_spy/features/geofence/geofence_screen.dart';
@@ -2543,9 +2544,12 @@ class _CompletedSessionBarState extends ConsumerState<_CompletedSessionBar> {
     final t = AppTheme.of(context);
     final units = ref.watch(unitSystemProvider);
     final wigle = ref.watch(wigleProvider);
+    final wdg = ref.watch(wdgwarsProvider);
     final sid = wd.lastCompletedSessionId ?? wd.sessionId;
     final isUploaded = wigle.isUploaded(sid);
     final isUploading = wigle.isUploading(sid);
+    final wdgUploaded = wdg.isUploaded(sid);
+    final wdgUploading = wdg.isUploading(sid);
     final flockDets = wd.flockDetections;
     final detectorDets = wd.detectorDetections;
 
@@ -2790,6 +2794,55 @@ class _CompletedSessionBarState extends ConsumerState<_CompletedSessionBar> {
                           isUploaded ? 'SENT' : 'WIGLE',
                           style: TextStyle(
                             color: isUploaded ? AppTheme.success : AppTheme.warning,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700, letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (wdg.isLoggedIn) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: wdgUploaded || wdgUploading
+                      ? null
+                      : () => _uploadToWdgwars(context, ref, sid),
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 48, minHeight: 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: (wdgUploaded ? AppTheme.success : AppTheme.wdgwars)
+                          .withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: (wdgUploaded ? AppTheme.success : AppTheme.wdgwars)
+                            .withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (wdgUploading)
+                          const SizedBox(
+                            width: 12, height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5, color: AppTheme.wdgwars,
+                            ),
+                          )
+                        else
+                          Icon(
+                            wdgUploaded ? Icons.cloud_done : Icons.sports_esports,
+                            size: 14,
+                            color: wdgUploaded ? AppTheme.success : AppTheme.wdgwars,
+                          ),
+                        const SizedBox(width: 4),
+                        Text(
+                          wdgUploaded ? 'SENT' : 'WDG',
+                          style: TextStyle(
+                            color: wdgUploaded ? AppTheme.success : AppTheme.wdgwars,
                             fontSize: 9,
                             fontWeight: FontWeight.w700, letterSpacing: 0.5,
                           ),
@@ -3118,6 +3171,32 @@ class _CompletedSessionBarState extends ConsumerState<_CompletedSessionBar> {
       );
     }
   }
+
+  Future<void> _uploadToWdgwars(BuildContext context, WidgetRef wRef, String sid) async {
+    if (sid.isEmpty) return;
+    if (!await _confirmWdgwarsUpload(context)) return;
+    if (!context.mounted) return;
+    final wdg = wRef.read(wdgwarsProvider);
+    final result = await wdg.uploadSession(sid, wd);
+    if (!context.mounted) return;
+
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.wdgwars,
+          content: Text(result.summary,
+              style: const TextStyle(color: Color(0xFF0D1117))),
+        ),
+      );
+    } else if (wdg.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.error,
+          content: Text('Upload failed: ${wdg.error}'),
+        ),
+      );
+    }
+  }
 }
 
 class _SessionHistorySheet extends ConsumerStatefulWidget {
@@ -3245,6 +3324,7 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
                       ));
                     }
                     final wigle = ref.watch(wigleProvider);
+                    final wdg = ref.watch(wdgwarsProvider);
                     return ListView.builder(
                       controller: scrollController,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -3283,6 +3363,11 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
                               : null,
                           wigleUploaded: wigle.isUploaded(sid),
                           wigleUploading: wigle.isUploading(sid),
+                          onUploadWdgwars: wdg.isLoggedIn
+                              ? () => _uploadToWdgwars(context, ref, sid)
+                              : null,
+                          wdgwarsUploaded: wdg.isUploaded(sid),
+                          wdgwarsUploading: wdg.isUploading(sid),
                         );
                       },
                     );
@@ -3511,6 +3596,68 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
       );
     }
   }
+
+  Future<void> _uploadToWdgwars(BuildContext context, WidgetRef ref, String sid) async {
+    final wdg = ref.read(wdgwarsProvider);
+    final wd = ref.read(wardriveProvider);
+
+    if (wdg.isUploading(sid)) return;
+    if (!await _confirmWdgwarsUpload(context)) return;
+    if (!context.mounted) return;
+
+    final result = await wdg.uploadSession(sid, wd);
+    if (!context.mounted) return;
+
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.wdgwars,
+          content: Text(result.summary,
+              style: const TextStyle(color: Color(0xFF0D1117))),
+        ),
+      );
+    } else if (wdg.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.error,
+          content: Text('Upload failed: ${wdg.error}'),
+        ),
+      );
+    }
+  }
+}
+
+Future<bool> _confirmWdgwarsUpload(BuildContext context) async {
+  final t = AppTheme.of(context);
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: t.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Upload to WDGWars?',
+          style: TextStyle(color: t.textPrimary, fontWeight: FontWeight.w700)),
+      content: Text(
+        'This publishes this session — network MACs, SSIDs and GPS coordinates — '
+        'to the WDGWars map for your gang. Once uploaded it cannot be retracted.',
+        style: TextStyle(color: t.textDim, fontSize: 13),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text('CANCEL', style: TextStyle(color: t.textDim)),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppTheme.wdgwars,
+            foregroundColor: const Color(0xFF0D1117),
+          ),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('UPLOAD'),
+        ),
+      ],
+    ),
+  );
+  return ok ?? false;
 }
 
 Future<bool> _confirmWigleUpload(BuildContext context) async {
@@ -3558,6 +3705,9 @@ class _SessionRow extends ConsumerWidget {
     this.onUploadWigle,
     this.wigleUploaded = false,
     this.wigleUploading = false,
+    this.onUploadWdgwars,
+    this.wdgwarsUploaded = false,
+    this.wdgwarsUploading = false,
     this.flockCountFuture,
     this.detectorCountFuture,
     this.droneCountFuture,
@@ -3573,6 +3723,9 @@ class _SessionRow extends ConsumerWidget {
   final VoidCallback? onUploadWigle;
   final bool wigleUploaded;
   final bool wigleUploading;
+  final VoidCallback? onUploadWdgwars;
+  final bool wdgwarsUploaded;
+  final bool wdgwarsUploading;
   final Future<int>? flockCountFuture;
   final Future<int>? detectorCountFuture;
   final Future<int>? droneCountFuture;
@@ -3793,6 +3946,21 @@ class _SessionRow extends ConsumerWidget {
                     onTap: (wigleUploaded || wigleUploading) ? null : onUploadWigle,
                     isLoading: wigleUploading,
                   );
+            final wdgwarsBtn = onUploadWdgwars == null
+                ? null
+                : _SessionIconBtn(
+                    icon: wdgwarsUploading
+                        ? Icons.cloud_sync
+                        : (wdgwarsUploaded
+                            ? Icons.cloud_done
+                            : Icons.sports_esports),
+                    label: wdgwarsUploading
+                        ? 'SENDING'
+                        : (wdgwarsUploaded ? 'SENT' : 'WDG'),
+                    color: wdgwarsUploaded ? AppTheme.success : AppTheme.wdgwars,
+                    onTap: (wdgwarsUploaded || wdgwarsUploading) ? null : onUploadWdgwars,
+                    isLoading: wdgwarsUploading,
+                  );
             final delBtn = _SessionIconBtn(
               icon: Icons.delete_forever_outlined,
               label: 'DEL',
@@ -3804,6 +3972,10 @@ class _SessionRow extends ConsumerWidget {
               const SizedBox(width: 4),
               if (wigleBtn != null) ...[
                 wigleBtn,
+                const SizedBox(width: 4),
+              ],
+              if (wdgwarsBtn != null) ...[
+                wdgwarsBtn,
                 const SizedBox(width: 4),
               ],
               delBtn,

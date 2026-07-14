@@ -206,6 +206,11 @@ class AppTheme {
   static const uniPwn = Color(0xFFE65A6B);
   static const wardrive = Color(0xFFE6895A);
 
+  // Upload targets
+  static const wigle = Color(0xFFE6A85A);
+  static const wdgwars = Color(0xFF00E5FF);
+  static const wdgwarsAlt = Color(0xFFA855F7);
+
   // GPS quality colors
   static const gpsGood = Color(0xFF5AE6A1);
   static const gpsFair = Color(0xFFE6A85A);

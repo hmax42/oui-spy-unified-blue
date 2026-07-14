@@ -80,7 +80,7 @@ Flutter app for iOS, macOS, and Android.
 
 **Live feed** — every detection from every engine in one stream. Filter by engine / preset / node, sort by time / RSSI / MAC, free-text search, and export the current view to WiGLE CSV. Tap a row to foxhunt or map it; long-press for the full detail sheet.
 
-**Wardrive & map** — pick any mix of targets (WiGLE / Flock / Drone / Detector) and a radio (WiFi / BLE / Both), then **START**. Hits plot live, color-graded by density, with your route behind you. Drones plot at their broadcast Remote ID position (or an RSSI ring when they report no fix). Sessions save as WiGLE CSV and upload to WiGLE with your API key; saved sessions replay on the map, and you can import CSVs.
+**Wardrive & map** — pick any mix of targets (WiGLE / Flock / Drone / Detector) and a radio (WiFi / BLE / Both), then **START**. Hits plot live, color-graded by density, with your route behind you. Drones plot at their broadcast Remote ID position (or an RSSI ring when they report no fix). Sessions save as WiGLE CSV and upload to **WiGLE** and/or **[WDGWars](https://wdgwars.pl)** with your API key — per-session upload buttons in the map bar and session log; saved sessions replay on the map, and you can import CSVs.
 
 <img width="709" alt="App home" src="https://github.com/user-attachments/assets/62470061-c382-4724-8d86-72cb4dd4c1df" />
 <img width="910" alt="Wardrive map" src="https://github.com/user-attachments/assets/cc0d4cc9-6524-41c7-bb04-9cd01dae58b8" />
@@ -95,7 +95,9 @@ Flutter app for iOS, macOS, and Android.
 
 **OTA updates** *(Settings → Updates)* — update over WiFi (give credentials once) or BLE (slower, works anywhere). In a mesh, nodes update one at a time.
 
-**Settings** — appearance, units, scan timing, channel range, the OUI vendor database (with WiGLE CSV import), WiGLE login, buzzer/LED, station-mode WiFi, watchlist, ignore list, factory reset, and database export/import for backing up captures.
+**Wardrive accounts** — link **WiGLE** (API name + token) and **WDGWars** (64-char API key) at the top of *Settings → Config*. Each shows live stats — WiGLE rank / WiFi / BT counts; WDGWars networks, badges, gang, and your rolling 24 h new-AP quota — and a condensed strip on the home screen links back to the full view.
+
+**Settings** — appearance, units, scan timing, channel range, the OUI vendor database (with WiGLE CSV import), WiGLE + WDGWars accounts, buzzer/LED, station-mode WiFi, watchlist, ignore list, factory reset, and database export/import for backing up captures.
 
 <img width="1133" alt="Settings" src="https://github.com/user-attachments/assets/b8072937-67fb-4ae3-adc0-d1c748a26983" />
 
@@ -186,7 +188,7 @@ flutter build macos --release
 
 **App:** flutter_blue_plus · flutter_map + latlong2 · drift + sqlite3 · geolocator · flutter_riverpod · go_router · flutter_local_notifications · dio · share_plus · flutter_secure_storage · wakelock_plus · permission_handler.
 
-**Services:** [WiGLE](https://api.wigle.net) · [CARTO](https://carto.com/basemaps/) / [OpenStreetMap](https://www.openstreetmap.org/) / [OpenTopoMap](https://opentopomap.org/) / [Stadia Maps](https://stadiamaps.com/) tiles · [Ringmast4r/OUI-Master-Database](https://github.com/Ringmast4r/OUI-Master-Database) vendor OUIs.
+**Services:** [WiGLE](https://api.wigle.net) · [WDGWars](https://wdgwars.pl) · [CARTO](https://carto.com/basemaps/) / [OpenStreetMap](https://www.openstreetmap.org/) / [OpenTopoMap](https://opentopomap.org/) / [Stadia Maps](https://stadiamaps.com/) tiles · [Ringmast4r/OUI-Master-Database](https://github.com/Ringmast4r/OUI-Master-Database) vendor OUIs.
 
 </details>
 

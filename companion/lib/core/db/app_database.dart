@@ -9,6 +9,33 @@ import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
+/// Aggregate stats over all collected detections (for the Wardrive config tab).
+class CollectionStats {
+  CollectionStats({
+    required this.totalUnique,
+    required this.wifiUnique,
+    required this.bleUnique,
+    required this.totalDetections,
+    required this.sessionCount,
+    required this.ssidCount,
+    required this.channelCounts,
+    required this.authCounts,
+    required this.ouiCounts,
+  });
+
+  final int totalUnique;
+  final int wifiUnique;
+  final int bleUnique;
+  final int totalDetections;
+  final int sessionCount;
+  final int ssidCount;
+  final Map<int, int> channelCounts;
+  final Map<int, int> authCounts;
+  final List<MapEntry<String, int>> ouiCounts;
+
+  bool get isEmpty => totalUnique == 0;
+}
+
 @DriftDatabase(tables: [
   Nodes,
   Sessions,
@@ -231,6 +258,53 @@ class AppDatabase extends _$AppDatabase {
         bleResult.read(detections.macAddress.count(distinct: true)) ?? 0;
 
     return (wifi: wifi, ble: ble);
+  }
+
+  /// Aggregate collection stats across every completed session.
+  Future<CollectionStats> wardriveCollectionStats() async {
+    final totals = await customSelect(
+      "SELECT "
+      "(SELECT COUNT(DISTINCT mac_address) FROM detections) AS total_unique, "
+      "(SELECT COUNT(DISTINCT mac_address) FROM detections WHERE detection_method='wifi_ap') AS wifi_unique, "
+      "(SELECT COUNT(DISTINCT mac_address) FROM detections WHERE detection_method='ble_adv') AS ble_unique, "
+      "(SELECT COUNT(*) FROM detections) AS total_dets, "
+      "(SELECT COUNT(*) FROM sessions WHERE ended_at IS NOT NULL) AS session_count, "
+      "(SELECT COUNT(DISTINCT ssid) FROM detections WHERE detection_method='wifi_ap' AND ssid != '') AS ssid_count",
+    ).getSingle();
+
+    final chanRows = await customSelect(
+      "SELECT channel AS ch, COUNT(DISTINCT mac_address) AS c FROM detections "
+      "WHERE detection_method='wifi_ap' AND channel BETWEEN 1 AND 177 "
+      "GROUP BY channel ORDER BY channel",
+    ).get();
+
+    final authRows = await customSelect(
+      "SELECT auth_mode AS a, COUNT(DISTINCT mac_address) AS c FROM detections "
+      "WHERE detection_method='wifi_ap' GROUP BY auth_mode",
+    ).get();
+
+    final ouiRows = await customSelect(
+      "SELECT UPPER(SUBSTR(mac_address,1,8)) AS oui, COUNT(DISTINCT mac_address) AS c "
+      "FROM detections WHERE mac_address != '' GROUP BY oui ORDER BY c DESC LIMIT 300",
+    ).get();
+
+    return CollectionStats(
+      totalUnique: totals.read<int>('total_unique'),
+      wifiUnique: totals.read<int>('wifi_unique'),
+      bleUnique: totals.read<int>('ble_unique'),
+      totalDetections: totals.read<int>('total_dets'),
+      sessionCount: totals.read<int>('session_count'),
+      ssidCount: totals.read<int>('ssid_count'),
+      channelCounts: {
+        for (final r in chanRows) r.read<int>('ch'): r.read<int>('c'),
+      },
+      authCounts: {
+        for (final r in authRows) r.read<int>('a'): r.read<int>('c'),
+      },
+      ouiCounts: [
+        for (final r in ouiRows) MapEntry(r.read<String>('oui'), r.read<int>('c')),
+      ],
+    );
   }
 
   /// Get all distinct MACs seen across all sessions for stalking detection.

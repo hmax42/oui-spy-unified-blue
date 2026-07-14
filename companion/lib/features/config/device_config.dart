@@ -33,6 +33,8 @@ import 'dart:io';
 import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/core/wigle/wigle_api.dart';
 import 'package:oui_spy/core/wigle/wigle_provider.dart';
+import 'package:oui_spy/core/wdgwars/wdgwars_api.dart';
+import 'package:oui_spy/core/wdgwars/wdgwars_provider.dart';
 import 'package:oui_spy/core/app_time.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
@@ -46,6 +48,10 @@ class DeviceConfigScreen extends ConsumerStatefulWidget {
 class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  static const _tabLabels = [
+    'APP', 'WARDRIVE', 'IGNORE', 'DETECTIONS',
+    'HARDWARE', 'ALERTS', 'MESH', 'FIRMWARE',
+  ];
 
   bool _flockExtendedOui = false;
   bool _offlineScanEnabled = false;
@@ -205,34 +211,14 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
                 ],
               ),
             ),
-            TabBar(
-              controller: _tabController,
-              labelColor: AppTheme.accent,
-              unselectedLabelColor: t.textDim,
-              indicatorColor: AppTheme.accent,
-              labelStyle: const TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1,
-              ),
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              tabs: const [
-                Tab(text: 'APP'),
-                Tab(text: 'WATCHLIST'),
-                Tab(text: 'IGNORE'),
-                Tab(text: 'DETECTIONS'),
-                Tab(text: 'HARDWARE'),
-                Tab(text: 'ALERTS'),
-                Tab(text: 'MESH'),
-                Tab(text: 'FIRMWARE'),
-              ],
-            ),
+            _ConfigTabBar(controller: _tabController, labels: _tabLabels),
             const Divider(height: 1),
             Expanded(
               child: TabBarView(
                 controller: _tabController,
                 children: [
                   _buildAppTab(),
-                  const _WatchlistTab(),
+                  const _WardriveConfigTab(),
                   const _IgnoreListTab(),
                   const _DetectionsTab(),
                   _buildHardwareTab(),
@@ -340,10 +326,6 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
         const SizedBox(height: 16),
         const ConfigSectionHeader(label: 'OUI DATABASE'),
         const _OuiDatabaseSection(),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'WIGLE'),
-        const _WigleSection(),
 
         const SizedBox(height: 16),
         const ConfigSectionHeader(label: 'DATA & BACKUP'),
@@ -1801,6 +1783,991 @@ class _WigleStat extends StatelessWidget {
   }
 }
 
+class _WdgwarsSection extends ConsumerStatefulWidget {
+  const _WdgwarsSection();
+
+  @override
+  ConsumerState<_WdgwarsSection> createState() => _WdgwarsSectionState();
+}
+
+class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
+  final _keyController = TextEditingController();
+  bool _obscureKey = true;
+  bool _testing = false;
+
+  @override
+  void dispose() {
+    _keyController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final w = ref.watch(wdgwarsProvider);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.wdgwars.withValues(alpha: 0.07),
+            AppTheme.wdgwarsAlt.withValues(alpha: 0.04),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.sports_esports, size: 16, color: AppTheme.wdgwars),
+              const SizedBox(width: 6),
+              ShaderMask(
+                shaderCallback: (r) => const LinearGradient(
+                  colors: [AppTheme.wdgwars, AppTheme.wdgwarsAlt],
+                ).createShader(r),
+                child: const Text(
+                  'WDGWARS',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (w.isLoggedIn)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.wdgwars.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.4)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle, size: 10, color: AppTheme.wdgwars),
+                      SizedBox(width: 4),
+                      Text('LINKED', style: TextStyle(
+                        color: AppTheme.wdgwars, fontSize: 8,
+                        fontWeight: FontWeight.w700, letterSpacing: 0.5,
+                      )),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Watch Dogs Go Wars — gamified wardriving. Capture territory for your gang.',
+            style: TextStyle(color: t.textDim, fontSize: 11),
+          ),
+          const SizedBox(height: 12),
+
+          if (w.isLoggedIn) ...[
+            _WdgwarsStatsCard(stats: w.stats),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => ref.read(wdgwarsProvider).refreshStats(),
+                    icon: const Icon(Icons.refresh, size: 14),
+                    label: const Text('REFRESH', style: TextStyle(fontSize: 10, letterSpacing: 1)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.wdgwarsAlt,
+                      side: BorderSide(color: AppTheme.wdgwarsAlt.withValues(alpha: 0.35)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _confirmLogout(context),
+                    icon: const Icon(Icons.logout, size: 14),
+                    label: const Text('UNLINK', style: TextStyle(fontSize: 10, letterSpacing: 1)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.error,
+                      side: BorderSide(color: AppTheme.error.withValues(alpha: 0.3)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            Row(
+              children: [
+                const Icon(Icons.key, size: 14, color: AppTheme.wdgwars),
+                const SizedBox(width: 6),
+                Text('API Key', style: TextStyle(
+                  color: t.textPrimary, fontSize: 12, fontWeight: FontWeight.w600,
+                )),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Register at wdgwars.pl and generate a 64-char API key in your profile.',
+              style: TextStyle(color: t.textDim, fontSize: 10),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _keyController,
+              obscureText: _obscureKey,
+              style: TextStyle(color: t.textPrimary, fontSize: 13, fontFamily: 'monospace'),
+              decoration: InputDecoration(
+                labelText: 'X-API-Key',
+                labelStyle: TextStyle(color: t.textDim, fontSize: 12),
+                prefixIcon: const Icon(Icons.vpn_key_outlined, size: 16, color: AppTheme.wdgwars),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureKey ? Icons.visibility_off : Icons.visibility,
+                    size: 16, color: t.textDim,
+                  ),
+                  onPressed: () => setState(() => _obscureKey = !_obscureKey),
+                ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: t.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: t.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: AppTheme.wdgwars),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _testing || w.isLoading ? null : _testAndLogin,
+                icon: _testing || w.isLoading
+                    ? const SizedBox(
+                        width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white),
+                      )
+                    : const Icon(Icons.rocket_launch, size: 16),
+                label: Text(
+                  _testing || w.isLoading ? 'TESTING...' : 'TEST & LINK',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.wdgwars,
+                  foregroundColor: const Color(0xFF0D1117),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+            ),
+            if (w.error != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.error.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: AppTheme.error.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, size: 14, color: AppTheme.error),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        w.error!,
+                        style: const TextStyle(color: AppTheme.error, fontSize: 10),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _testAndLogin() async {
+    final key = _keyController.text.trim();
+    if (key.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter your WDGWars API key')),
+      );
+      return;
+    }
+    setState(() => _testing = true);
+    final success = await ref.read(wdgwarsProvider).login(key);
+    if (mounted) {
+      setState(() => _testing = false);
+      if (success) {
+        final stats = ref.read(wdgwarsProvider).stats;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppTheme.wdgwars,
+            content: Text('Linked as ${stats?.username ?? 'player'} '
+                '(${stats?.total ?? 0} networks)',
+                style: const TextStyle(color: Color(0xFF0D1117))),
+          ),
+        );
+      }
+    }
+  }
+
+  void _confirmLogout(BuildContext context) {
+    final t = AppTheme.of(context);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: t.background,
+        title: Text('Unlink WDGWars?', style: TextStyle(color: t.textPrimary)),
+        content: Text(
+          'This removes stored credentials. You can re-link anytime.',
+          style: TextStyle(color: t.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(wdgwarsProvider).logout();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
+            child: const Text('UNLINK'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WdgwarsStatsCard extends StatelessWidget {
+  const _WdgwarsStatsCard({this.stats});
+  final WdgwarsUserStats? stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final s = stats;
+    if (s == null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: t.background.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 14, height: 14,
+              child: CircularProgressIndicator(strokeWidth: 1.5, color: AppTheme.wdgwars)),
+            const SizedBox(width: 8),
+            Text('Loading stats...', style: TextStyle(color: t.textDim, fontSize: 11)),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: t.background.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.account_circle, size: 20, color: AppTheme.wdgwars),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  s.username,
+                  style: TextStyle(
+                    color: t.textPrimary, fontSize: 14, fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (s.rank != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.wdgwars.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.emoji_events, size: 12, color: AppTheme.wdgwars),
+                      const SizedBox(width: 4),
+                      Text('#${s.rank}', style: const TextStyle(
+                        color: AppTheme.wdgwars, fontSize: 12,
+                        fontWeight: FontWeight.w700, fontFamily: 'monospace',
+                      )),
+                    ],
+                  ),
+                ),
+                if (s.gang.isNotEmpty) const SizedBox(width: 6),
+              ],
+              if (s.gang.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.wdgwarsAlt.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.wdgwarsAlt.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.groups, size: 12, color: AppTheme.wdgwarsAlt),
+                      const SizedBox(width: 4),
+                      Text(s.gang, style: const TextStyle(
+                        color: AppTheme.wdgwarsAlt, fontSize: 10, fontWeight: FontWeight.w700,
+                      )),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _WigleStat(
+                icon: Icons.wifi, label: 'WiFi',
+                value: _fmt(s.wifi), color: AppTheme.wdgwars,
+              ),
+              _WigleStat(
+                icon: Icons.bluetooth, label: 'BLE',
+                value: _fmt(s.ble), color: AppTheme.wdgwarsAlt,
+              ),
+              _WigleStat(
+                icon: Icons.flight, label: 'Air',
+                value: _fmt(s.aircraft), color: const Color(0xFFc4b5fd),
+              ),
+              _WigleStat(
+                icon: Icons.hub, label: 'Mesh',
+                value: _fmt(s.mesh), color: AppTheme.success,
+              ),
+              _WigleStat(
+                icon: Icons.military_tech, label: 'Badges',
+                value: '${s.badges.length}', color: AppTheme.warning,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: AppTheme.wdgwars.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              children: [
+                Text(_fmt(s.total), style: const TextStyle(
+                  color: AppTheme.wdgwars, fontSize: 18,
+                  fontWeight: FontWeight.w700, fontFamily: 'monospace',
+                )),
+                Text('TOTAL NETWORKS', style: TextStyle(
+                  color: t.textDim, fontSize: 8,
+                  fontWeight: FontWeight.w600, letterSpacing: 1,
+                )),
+              ],
+            ),
+          ),
+          if (s.dailyCap > 0) ...[
+            const SizedBox(height: 8),
+            Builder(builder: (_) {
+              final used = (s.dailyUsed / s.dailyCap).clamp(0.0, 1.0);
+              final low = s.dailyRemaining < s.dailyCap * 0.1;
+              final barColor = low ? AppTheme.warning : AppTheme.wdgwars;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.speed, size: 11, color: barColor),
+                      const SizedBox(width: 4),
+                      Text('DAILY NEW-AP QUOTA', style: TextStyle(
+                        color: t.textDim, fontSize: 8,
+                        fontWeight: FontWeight.w600, letterSpacing: 1,
+                      )),
+                      const Spacer(),
+                      Text('${_fmt(s.dailyRemaining)} / ${_fmt(s.dailyCap)} left',
+                          style: TextStyle(
+                            color: barColor, fontSize: 9,
+                            fontWeight: FontWeight.w700, fontFamily: 'monospace',
+                          )),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: used,
+                      minHeight: 4,
+                      backgroundColor: t.border,
+                      valueColor: AlwaysStoppedAnimation(barColor),
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _fmt(int count) {
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return '$count';
+  }
+}
+
+class _ConfigTabBar extends StatelessWidget {
+  const _ConfigTabBar({required this.controller, required this.labels});
+  final TabController controller;
+  final List<String> labels;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            alignment: WrapAlignment.center,
+            children: [
+              for (int i = 0; i < labels.length; i++)
+                _TabPill(
+                  label: labels[i],
+                  selected: controller.index == i,
+                  onTap: () => controller.animateTo(i),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TabPill extends StatelessWidget {
+  const _TabPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppTheme.accent.withValues(alpha: 0.15)
+              : t.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected
+                ? AppTheme.accent
+                : t.border,
+            width: selected ? 1.2 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? AppTheme.accent : t.textDim,
+            fontSize: 10,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+            letterSpacing: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WardriveConfigTab extends ConsumerStatefulWidget {
+  const _WardriveConfigTab();
+
+  @override
+  ConsumerState<_WardriveConfigTab> createState() => _WardriveConfigTabState();
+}
+
+class _WardriveConfigTabState extends ConsumerState<_WardriveConfigTab> {
+  late Future<CollectionStats> _statsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _statsFuture = ref.read(databaseProvider).wardriveCollectionStats();
+  }
+
+  void _reload() {
+    setState(() {
+      _statsFuture = ref.read(databaseProvider).wardriveCollectionStats();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      children: [
+        const ConfigSectionHeader(label: 'WARDRIVE ACCOUNTS'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10, left: 2),
+          child: Text(
+            'Upload wardrive sessions and track your stats on WiGLE and WDGWars.',
+            style: TextStyle(color: t.textDim, fontSize: 11),
+          ),
+        ),
+        const _WigleSection(),
+        const SizedBox(height: 18),
+        const _WdgwarsSection(),
+
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            const Expanded(child: ConfigSectionHeader(label: 'COLLECTION STATS')),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _reload,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(Icons.refresh, size: 16, color: t.textDim),
+              ),
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10, left: 2),
+          child: Text(
+            'Everything you have collected across all sessions.',
+            style: TextStyle(color: t.textDim, fontSize: 11),
+          ),
+        ),
+        FutureBuilder<CollectionStats>(
+          future: _statsFuture,
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: AppTheme.accent),
+                  ),
+                ),
+              );
+            }
+            final s = snap.data!;
+            if (s.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: t.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: t.border),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.travel_explore, size: 18, color: t.textDim),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'No data yet — run a wardrive session to build stats.',
+                        style: TextStyle(color: t.textDim, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return _CollectionStatsView(stats: s);
+          },
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+}
+
+class _CollectionStatsView extends ConsumerWidget {
+  const _CollectionStatsView({required this.stats});
+  final CollectionStats stats;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final oui = ref.watch(ouiLookupProvider);
+
+    final vendorCounts = <String, int>{};
+    for (final e in stats.ouiCounts) {
+      final name = oui.lookup('${e.key}:00:00:00') ?? 'Unknown';
+      vendorCounts[name] = (vendorCounts[name] ?? 0) + e.value;
+    }
+    final topVendors = vendorCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final vendors = topVendors.take(12).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _MiniStatTile(icon: Icons.fingerprint, label: 'UNIQUE',
+                value: _fmt(stats.totalUnique), color: AppTheme.accent),
+            _MiniStatTile(icon: Icons.wifi, label: 'WIFI',
+                value: _fmt(stats.wifiUnique), color: AppTheme.wardrive),
+            _MiniStatTile(icon: Icons.bluetooth, label: 'BLE',
+                value: _fmt(stats.bleUnique), color: const Color(0xFF4A9EFF)),
+            _MiniStatTile(icon: Icons.router, label: 'SSIDS',
+                value: _fmt(stats.ssidCount), color: AppTheme.skySpy),
+            _MiniStatTile(icon: Icons.route, label: 'SESSIONS',
+                value: '${stats.sessionCount}', color: AppTheme.success),
+            _MiniStatTile(icon: Icons.sensors, label: 'HITS',
+                value: _fmt(stats.totalDetections), color: AppTheme.warning),
+          ],
+        ),
+        const SizedBox(height: 18),
+
+        if (stats.channelCounts.isNotEmpty) ...[
+          _StatBlockLabel('CHANNEL DISTRIBUTION', Icons.equalizer),
+          const SizedBox(height: 8),
+          _ChannelChart(
+            counts: {
+              for (final e in stats.channelCounts.entries)
+                if (e.key <= 14) e.key: e.value,
+            },
+            band: '2.4 GHz',
+            color: AppTheme.accent,
+          ),
+          if (stats.channelCounts.keys.any((c) => c >= 36)) ...[
+            const SizedBox(height: 10),
+            _ChannelChart(
+              counts: {
+                for (final e in stats.channelCounts.entries)
+                  if (e.key >= 36) e.key: e.value,
+              },
+              band: '5 GHz',
+              color: AppTheme.skySpy,
+            ),
+          ],
+          const SizedBox(height: 18),
+        ],
+
+        if (vendors.isNotEmpty) ...[
+          _StatBlockLabel('TOP VENDORS', Icons.factory),
+          const SizedBox(height: 8),
+          ...() {
+            final maxV = vendors.first.value;
+            return vendors.map((e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: _BarRow(
+                    label: e.key,
+                    value: e.value,
+                    max: maxV,
+                    color: _heat(e.value, maxV),
+                  ),
+                ));
+          }(),
+          const SizedBox(height: 18),
+        ],
+
+        if (stats.authCounts.isNotEmpty) ...[
+          _StatBlockLabel('ENCRYPTION', Icons.lock_outline),
+          const SizedBox(height: 8),
+          ...() {
+            final entries = stats.authCounts.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+            final maxV = entries.first.value;
+            return entries.map((e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: _BarRow(
+                    label: _authLabel(e.key),
+                    value: e.value,
+                    max: maxV,
+                    color: _authColor(e.key),
+                  ),
+                ));
+          }(),
+        ],
+      ],
+    );
+  }
+
+  static String _fmt(int c) {
+    if (c >= 1000000) return '${(c / 1000000).toStringAsFixed(1)}M';
+    if (c >= 1000) return '${(c / 1000).toStringAsFixed(1)}K';
+    return '$c';
+  }
+
+  static Color _heat(int value, int max) {
+    final f = max == 0 ? 0.0 : (value / max).clamp(0.0, 1.0);
+    return Color.lerp(AppTheme.wdgwars, AppTheme.wardrive, 1 - f)!;
+  }
+
+  static String _authLabel(int a) => switch (a) {
+        0 => 'Open',
+        1 => 'WEP',
+        2 => 'WPA',
+        3 => 'WPA2',
+        4 => 'WPA/WPA2',
+        5 => 'WPA2-EAP',
+        6 => 'WPA3',
+        _ => 'Other',
+      };
+
+  static Color _authColor(int a) => switch (a) {
+        0 => AppTheme.error,
+        1 => AppTheme.error,
+        2 => AppTheme.warning,
+        6 => AppTheme.success,
+        _ => AppTheme.accent,
+      };
+}
+
+class _StatBlockLabel extends StatelessWidget {
+  const _StatBlockLabel(this.label, this.icon);
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Row(
+      children: [
+        Icon(icon, size: 13, color: t.textDim),
+        const SizedBox(width: 6),
+        Text(label, style: TextStyle(
+          color: t.textSecondary, fontSize: 10,
+          fontWeight: FontWeight.w700, letterSpacing: 1.5,
+        )),
+      ],
+    );
+  }
+}
+
+class _MiniStatTile extends StatelessWidget {
+  const _MiniStatTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final w = (MediaQuery.of(context).size.width - 32 - 16) / 3;
+    return Container(
+      width: w.clamp(90.0, 140.0),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: t.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: t.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 5),
+              Text(label, style: TextStyle(
+                color: t.textDim, fontSize: 8,
+                fontWeight: FontWeight.w700, letterSpacing: 1,
+              )),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(
+            color: t.textPrimary, fontSize: 18,
+            fontWeight: FontWeight.w700, fontFamily: 'monospace', height: 1,
+          )),
+        ],
+      ),
+    );
+  }
+}
+
+class _BarRow extends StatelessWidget {
+  const _BarRow({
+    required this.label,
+    required this.value,
+    required this.max,
+    required this.color,
+  });
+  final String label;
+  final int value;
+  final int max;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final f = max == 0 ? 0.0 : (value / max).clamp(0.02, 1.0);
+    return Row(
+      children: [
+        SizedBox(
+          width: 96,
+          child: Text(
+            label,
+            style: TextStyle(color: t.textSecondary, fontSize: 11),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: Stack(
+              children: [
+                Container(height: 14, color: t.surface),
+                FractionallySizedBox(
+                  widthFactor: f,
+                  child: Container(
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 44,
+          child: Text(
+            _CollectionStatsView._fmt(value),
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: t.textPrimary, fontSize: 11,
+              fontFamily: 'monospace', fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChannelChart extends StatelessWidget {
+  const _ChannelChart({
+    required this.counts,
+    required this.band,
+    required this.color,
+  });
+  final Map<int, int> counts;
+  final String band;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    if (counts.isEmpty) return const SizedBox.shrink();
+    final entries = counts.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+    final maxV = entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(band, style: TextStyle(
+          color: t.textDim, fontSize: 9,
+          fontWeight: FontWeight.w600, letterSpacing: 1,
+        )),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 64,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: entries.map((e) {
+              final f = maxV == 0 ? 0.0 : (e.value / maxV).clamp(0.06, 1.0);
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        _CollectionStatsView._fmt(e.value),
+                        style: TextStyle(color: t.textDim, fontSize: 7,
+                            fontFamily: 'monospace'),
+                        maxLines: 1,
+                      ),
+                      const SizedBox(height: 2),
+                      Container(
+                        height: 40 * f,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.85),
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(2)),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text('${e.key}', style: TextStyle(
+                        color: t.textSecondary, fontSize: 8,
+                        fontFamily: 'monospace',
+                      )),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _IgnoreListTab extends ConsumerWidget {
   const _IgnoreListTab();
 
@@ -2211,434 +3178,6 @@ class _IgnoreEntryTile extends ConsumerWidget {
   }
 }
 
-
-class _WatchlistTab extends ConsumerWidget {
-  const _WatchlistTab();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = AppTheme.of(context);
-    final watchlist = ref.watch(watchlistProvider);
-    final entries = watchlist.entries;
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
-          child: Row(
-            children: [
-              Icon(Icons.radar, size: 14, color: AppTheme.detector),
-              const SizedBox(width: 6),
-              Text(
-                'WATCHLIST',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      letterSpacing: 2,
-                      color: t.textDim,
-                    ),
-              ),
-              const Spacer(),
-              Text(
-                '${entries.where((e) => e.enabled).length} active',
-                style: TextStyle(
-                  color: t.textDim, fontSize: 10,
-                  fontFamily: 'monospace',
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => _showAddDialog(context, ref),
-                child: Container(
-                  width: 32, height: 32,
-                  decoration: BoxDecoration(
-                    color: AppTheme.detector.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: AppTheme.detector.withValues(alpha: 0.3)),
-                  ),
-                  child: const Icon(Icons.add,
-                      size: 18, color: AppTheme.detector),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-          child: Text(
-            'Detector engine alerts when any of these OUI prefixes or full '
-            'MAC addresses are seen. Used for runtime detection and CSV import '
-            'reclassification.',
-            style: TextStyle(color: t.textDim, fontSize: 11),
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: !watchlist.isLoaded
-              ? const Center(child: CircularProgressIndicator())
-              : entries.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.radar, size: 36, color: t.textDim),
-                          const SizedBox(height: 12),
-                          Text('NO TARGETS', style: TextStyle(
-                            color: t.textDim, fontSize: 12,
-                            fontWeight: FontWeight.w700, letterSpacing: 2,
-                          )),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Tap + to add an OUI prefix\nor full MAC to watch.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: t.textDim, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      itemCount: entries.length,
-                      itemBuilder: (_, i) =>
-                          _WatchlistEntryTile(entry: entries[i]),
-                    ),
-        ),
-      ],
-    );
-  }
-
-  void _showAddDialog(BuildContext context, WidgetRef ref) {
-    final t = AppTheme.of(context);
-    final idController = TextEditingController();
-    final descController = TextEditingController();
-    WatchlistMatchType matchType = WatchlistMatchType.oui;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final isHex = matchType != WatchlistMatchType.name;
-          final hint = switch (matchType) {
-            WatchlistMatchType.oui => 'AA:BB:CC',
-            WatchlistMatchType.fullMac => 'AA:BB:CC:DD:EE:FF',
-            WatchlistMatchType.name => 'penguin*',
-            WatchlistMatchType.serviceUuid => '0xFD5F',
-          };
-          final label = switch (matchType) {
-            WatchlistMatchType.oui => 'OUI prefix (3 bytes)',
-            WatchlistMatchType.fullMac => 'Full MAC address',
-            WatchlistMatchType.name => 'Device name (supports * and ?)',
-            WatchlistMatchType.serviceUuid => 'BLE 16-bit service UUID',
-          };
-          return AlertDialog(
-            backgroundColor: t.surface,
-            title: Text('Add Watchlist Target',
-                style: TextStyle(color: t.textPrimary)),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('MATCH TYPE', style: TextStyle(
-                    color: t.textDim, fontSize: 10,
-                    fontWeight: FontWeight.w700, letterSpacing: 1,
-                  )),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: WatchlistMatchType.values.map((type) {
-                      final selected = matchType == type;
-                      return Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            right: type == WatchlistMatchType.values.last
-                                ? 0
-                                : 6,
-                          ),
-                          child: _MatchTypeChip(
-                            label: switch (type) {
-                              WatchlistMatchType.oui => 'OUI',
-                              WatchlistMatchType.fullMac => 'FULL MAC',
-                              WatchlistMatchType.name => 'NAME',
-                              WatchlistMatchType.serviceUuid => 'UUID',
-                            },
-                            selected: selected,
-                            onTap: () =>
-                                setDialogState(() => matchType = type),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: idController,
-                    style: TextStyle(
-                      color: t.textPrimary,
-                      fontFamily: isHex ? 'monospace' : null,
-                      fontSize: 14,
-                    ),
-                    textCapitalization: isHex
-                        ? TextCapitalization.characters
-                        : TextCapitalization.none,
-                    decoration: InputDecoration(
-                      hintText: hint,
-                      labelText: label,
-                    ),
-                  ),
-                  if (matchType == WatchlistMatchType.name) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Use * for any sequence, ? for one character. '
-                      'Match is case-insensitive.',
-                      style: TextStyle(color: t.textDim, fontSize: 10),
-                    ),
-                  ],
-                  if (matchType == WatchlistMatchType.serviceUuid) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      '16-bit BLE service UUID advertised by the device '
-                      '(e.g. 0xFD5F). Matched on-device by detector nodes.',
-                      style: TextStyle(color: t.textDim, fontSize: 10),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: descController,
-                    style: TextStyle(color: t.textPrimary, fontSize: 13),
-                    decoration: const InputDecoration(
-                      hintText: 'e.g. Flock Safety',
-                      labelText: 'Label (optional)',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('CANCEL'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final raw = idController.text.trim();
-                  if (raw.isEmpty) return;
-                  String identifier;
-                  if (matchType == WatchlistMatchType.name) {
-                    identifier = raw;
-                  } else if (matchType == WatchlistMatchType.serviceUuid) {
-                    final hex = raw
-                        .replaceFirst(
-                            RegExp(r'^0x', caseSensitive: false), '')
-                        .replaceAll(RegExp(r'[^0-9a-fA-F]'), '');
-                    if (hex.isEmpty || hex.length > 4) return;
-                    identifier = '0x${hex.toUpperCase().padLeft(4, '0')}';
-                  } else {
-                    final hex = _normalizeHex(raw);
-                    if (matchType == WatchlistMatchType.fullMac &&
-                        hex.length != 12) return;
-                    if (matchType == WatchlistMatchType.oui &&
-                        hex.length < 6) return;
-                    identifier = _formatMac(
-                      hex,
-                      matchType == WatchlistMatchType.fullMac ? 6 : 3,
-                    );
-                  }
-                  ref.read(watchlistProvider).add(WatchlistEntry(
-                        identifier: identifier,
-                        matchType: matchType,
-                        description: descController.text.trim(),
-                      ));
-                  Navigator.pop(ctx);
-                },
-                child: const Text('ADD'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  static String _normalizeHex(String s) {
-    return s.toLowerCase().replaceAll(RegExp(r'[^0-9a-f]'), '');
-  }
-
-  static String _formatMac(String hex, int byteCount) {
-    final n = (byteCount * 2).clamp(0, hex.length);
-    final h = hex.substring(0, n);
-    final buf = StringBuffer();
-    for (int i = 0; i < h.length; i++) {
-      if (i > 0 && i.isEven) buf.write(':');
-      buf.write(h[i]);
-    }
-    return buf.toString();
-  }
-}
-
-class _MatchTypeChip extends StatelessWidget {
-  const _MatchTypeChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppTheme.detector.withValues(alpha: 0.15)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: selected
-                ? AppTheme.detector.withValues(alpha: 0.5)
-                : t.border,
-          ),
-        ),
-        child: Center(
-          child: Text(label, style: TextStyle(
-            color: selected ? AppTheme.detector : t.textSecondary,
-            fontSize: 11, fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-          )),
-        ),
-      ),
-    );
-  }
-}
-
-class _WatchlistEntryTile extends ConsumerWidget {
-  const _WatchlistEntryTile({required this.entry});
-  final WatchlistEntry entry;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = AppTheme.of(context);
-    final isHex = !entry.isName;
-    final isEnabled = entry.enabled;
-    final IconData icon = switch (entry.matchType) {
-      WatchlistMatchType.oui => Icons.radar,
-      WatchlistMatchType.fullMac => Icons.fingerprint,
-      WatchlistMatchType.name => Icons.badge_outlined,
-      WatchlistMatchType.serviceUuid => Icons.bluetooth_searching,
-    };
-    return Dismissible(
-      key: ValueKey('wl:${entry.matchType.name}:${entry.identifier}'),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 16),
-        margin: const EdgeInsets.only(bottom: 6),
-        decoration: BoxDecoration(
-          color: AppTheme.error.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child:
-            const Icon(Icons.delete_outline, color: AppTheme.error, size: 20),
-      ),
-      onDismissed: (_) => ref.read(watchlistProvider).remove(entry),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: t.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isEnabled ? t.border : t.border.withValues(alpha: 0.4),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(
-                color: (isEnabled ? AppTheme.detector : t.textDim)
-                    .withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                icon,
-                size: 16,
-                color: isEnabled ? AppTheme.detector : t.textDim,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isHex
-                        ? entry.identifier.toUpperCase()
-                        : entry.identifier,
-                    style: TextStyle(
-                      color: isEnabled ? t.textPrimary : t.textDim,
-                      fontSize: 13,
-                      fontFamily: isHex ? 'monospace' : null,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: isHex ? 0.5 : 0,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: (isEnabled ? AppTheme.detector : t.textDim)
-                              .withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        child: Text(
-                          entry.matchType.label,
-                          style: TextStyle(
-                            color: isEnabled ? AppTheme.detector : t.textDim,
-                            fontSize: 8, fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      if (entry.description.isNotEmpty) ...[
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            entry.description,
-                            style: TextStyle(color: t.textDim, fontSize: 10),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Transform.scale(
-              scale: 0.7,
-              child: Switch(
-                value: isEnabled,
-                onChanged: (v) =>
-                    ref.read(watchlistProvider).toggleEnabled(entry, enabled: v),
-                activeTrackColor: AppTheme.detector.withValues(alpha: 0.3),
-                activeColor: AppTheme.detector,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 enum _DetSort {
   time('TIME'),
