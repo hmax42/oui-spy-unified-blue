@@ -999,7 +999,7 @@ class _WardriveAccountsStrip extends ConsumerWidget {
         name: 'WDGWars',
         detail: s == null
             ? 'Loading…'
-            : '${_fmt(s.total)} nets${s.gang.isNotEmpty ? ' · ${s.gang}' : ''}',
+            : '${_fmt(s.total)} devices${s.gang.isNotEmpty ? ' · ${s.gang}' : ''}',
       ));
     }
 

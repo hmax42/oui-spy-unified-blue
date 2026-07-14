@@ -2020,7 +2020,7 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
           SnackBar(
             backgroundColor: AppTheme.wdgwars,
             content: Text('Linked as ${stats?.username ?? 'player'} '
-                '(${stats?.total ?? 0} networks)',
+                '(${stats?.total ?? 0} devices)',
                 style: const TextStyle(color: Color(0xFF0D1117))),
           ),
         );
@@ -2188,7 +2188,7 @@ class _WdgwarsStatsCard extends StatelessWidget {
                   color: AppTheme.wdgwars, fontSize: 18,
                   fontWeight: FontWeight.w700, fontFamily: 'monospace',
                 )),
-                Text('TOTAL NETWORKS', style: TextStyle(
+                Text('TOTAL DEVICES', style: TextStyle(
                   color: t.textDim, fontSize: 8,
                   fontWeight: FontWeight.w600, letterSpacing: 1,
                 )),
