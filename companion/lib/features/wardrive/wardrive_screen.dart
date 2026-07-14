@@ -3980,6 +3980,20 @@ class _SessionRow extends ConsumerWidget {
               ],
               delBtn,
             ];
+            final buttons = <Widget>[
+              csvBtn,
+              if (wigleBtn != null) wigleBtn,
+              if (wdgwarsBtn != null) wdgwarsBtn,
+              delBtn,
+            ];
+            final actionBar = Row(
+              children: [
+                for (int i = 0; i < buttons.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 6),
+                  Expanded(child: buttons[i]),
+                ],
+              ],
+            );
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -4006,11 +4020,8 @@ class _SessionRow extends ConsumerWidget {
                       const Spacer(),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: actionButtons,
-                  ),
+                  const SizedBox(height: 6),
+                  actionBar,
                 ] else
                   Row(
                     children: [

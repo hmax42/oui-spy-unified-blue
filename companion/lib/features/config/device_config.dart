@@ -2365,7 +2365,7 @@ class _WardriveConfigTabState extends ConsumerState<_WardriveConfigTab> {
         const SizedBox(height: 20),
         Row(
           children: [
-            const Expanded(child: ConfigSectionHeader(label: 'COLLECTION STATS')),
+            const Expanded(child: ConfigSectionHeader(label: 'YOUR CAPTURE DATABASE')),
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _reload,
@@ -2379,7 +2379,7 @@ class _WardriveConfigTabState extends ConsumerState<_WardriveConfigTab> {
         Padding(
           padding: const EdgeInsets.only(bottom: 10, left: 2),
           child: Text(
-            'Everything you have collected across all sessions.',
+            'Aggregated across every session saved in this app — your on-device capture data, not your linked accounts.',
             style: TextStyle(color: t.textDim, fontSize: 11),
           ),
         ),
@@ -2490,6 +2490,7 @@ class _CollectionStatsView extends ConsumerWidget {
               },
               band: '5 GHz',
               color: AppTheme.skySpy,
+              rotateLabels: true,
             ),
           ],
           const SizedBox(height: 18),
@@ -2704,10 +2705,12 @@ class _ChannelChart extends StatelessWidget {
     required this.counts,
     required this.band,
     required this.color,
+    this.rotateLabels = false,
   });
   final Map<int, int> counts;
   final String band;
   final Color color;
+  final bool rotateLabels;
 
   @override
   Widget build(BuildContext context) {
@@ -2715,6 +2718,9 @@ class _ChannelChart extends StatelessWidget {
     if (counts.isEmpty) return const SizedBox.shrink();
     final entries = counts.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
     final maxV = entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+    final labelStyle = TextStyle(
+      color: t.textSecondary, fontSize: 8, fontFamily: 'monospace',
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2725,14 +2731,15 @@ class _ChannelChart extends StatelessWidget {
         )),
         const SizedBox(height: 4),
         SizedBox(
-          height: 64,
+          height: rotateLabels ? 82 : 64,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: entries.map((e) {
               final f = maxV == 0 ? 0.0 : (e.value / maxV).clamp(0.06, 1.0);
               return Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                  padding: EdgeInsets.symmetric(
+                      horizontal: rotateLabels ? 1.0 : 1.5),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -2752,10 +2759,16 @@ class _ChannelChart extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 3),
-                      Text('${e.key}', style: TextStyle(
-                        color: t.textSecondary, fontSize: 8,
-                        fontFamily: 'monospace',
-                      )),
+                      if (rotateLabels)
+                        SizedBox(
+                          height: 24,
+                          child: Transform.rotate(
+                            angle: -0.9,
+                            child: Text('${e.key}', maxLines: 1, style: labelStyle),
+                          ),
+                        )
+                      else
+                        Text('${e.key}', style: labelStyle),
                     ],
                   ),
                 ),
