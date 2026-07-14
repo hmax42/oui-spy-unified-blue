@@ -3,16 +3,14 @@
 [![Release](https://img.shields.io/github/v/release/lukeswitz/oui-spy-unified-blue?include_prereleases&label=pre-release&color=green)](https://github.com/lukeswitz/oui-spy-unified-blue/releases)
 [![TestFlight](https://img.shields.io/badge/TestFlight-Join-blue.svg?logo=apple)](https://testflight.apple.com/join/5RCKgnJ2)
 ![Platforms](https://img.shields.io/badge/iOS%20%7C%20macOS%20%7C%20Android-1BA1E2)
-![Firmware](https://img.shields.io/badge/firmware-ESP32--S3-ff6600)
+![Firmware](https://img.shields.io/badge/firmware-ESP32-ff6600)
 [![CodeQL](https://github.com/lukeswitz/oui-spy-unified-blue/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/lukeswitz/oui-spy-unified-blue/actions/workflows/github-code-scanning/codeql)
 
 # OUI-APEX
 
 <img width="320" alt="OUI-SPY APEX" src="https://github.com/user-attachments/assets/5a201c27-558b-4409-9e49-82d6e0176a4c" />
 
-**A phone-controlled ESP32 WiFi/BLE detector and wardriver.** Eight detection engines on one ESP32-S3, driven from a Flutter app over BLE. Run a single board, or a mesh of boards with one coordinator.
-
-[**Which firmware?**](#which-firmware--node-vs-manager) · [**Quick start**](#quick-start) · [**Engines**](#engines) · [**The app**](#the-app) · [**Mesh**](#mesh-multiple-boards) · [**Flash & build**](#flashing--hardware)
+**A phone-controlled ESP32 WiFi/BLE detector and wardriver.** Eight detection engines on one ESP32-S3 (or a dual-band ESP32-C5 for 2.4 + 5 GHz), driven from a Flutter app over BLE. Run a single board, or a mesh of boards with one coordinator.
 
 </div>
 
@@ -21,26 +19,63 @@
 
 ---
 
-## Which firmware — NODE vs MANAGER
+## Table of Contents
 
-**One board? Flash NODE.**
+1. [What is OUI-APEX?](#what-is-oui-apex) — what it does, and NODE vs MANAGER
+2. [Supported boards](#supported-boards) — which board to buy / flash
+3. [Quick start](#quick-start) — flash, install the app, connect
+4. [The engines](#the-engines) — what it can detect
+5. [Using the app](#using-the-app) — home, feed, wardrive, PCAP, settings
+6. [Mesh — multiple boards](#mesh--multiple-boards) — manager + nodes
+7. [Detection internals](#detection-internals) — how each engine works
+8. [Flashing & hardware](#flashing--hardware) — web flasher, GPS wiring
+9. [Build from source](#build-from-source) — PlatformIO + Flutter
+10. [Dependencies & services](#dependencies--services)
+11. [Ecosystem](#ecosystem) — standalone forks
+12. [Acknowledgments](#acknowledgments)
+13. [Disclaimer](#disclaimer)
 
-- **NODE** is the scanner. It runs the detection engines on its own WiFi + BLE radios and connects to the phone app directly. A single node is a complete, standalone OUI-SPY. The web flasher defaults to it.
-- **MANAGER** is only for a mesh of **2+ boards**. It is a coordinator: it links to the phone, splits work across nodes, and aggregates their detections — **it has no detection engines and does not scan itself.** A lone manager connects to the app but finds nothing. Flash a manager only when you have nodes for it to run.
+---
 
-> [!NOTE]
-> Supports several esp32 variants: the s3 is recommended. Visit the web flasher to see the complete list (feel free to request support for others)
+## What is OUI-APEX?
 
-| Your Gear | Flash |
+OUI-APEX turns a cheap ESP32 board into a pocket **WiFi + BLE surveillance-hardware detector and wardriver**, fully driven from your phone over Bluetooth. Eight detection engines (trackers, Flock cameras, drones, and more) run on the board; a Flutter app on iOS / macOS / Android is the screen, map, and control panel. No SD card, no laptop — the board streams everything to the app over BLE.
+
+Every board runs one of two firmwares:
+
+- **NODE** — the scanner. Runs the detection engines on its own WiFi + BLE radios and talks to the phone app directly. **A single node is a complete, standalone OUI-APEX.** The web flasher defaults to it.
+- **MANAGER** — only for a mesh of **2+ boards**. A coordinator: it links to the phone, splits work across nodes, and aggregates their detections. **It has no detection engines and does not scan itself** — a lone manager connects to the app but finds nothing. Flash a manager only when you have nodes for it to run.
+
+**One board? Flash NODE and stop reading here.** Managers are covered in [Mesh](#mesh--multiple-boards).
+
+---
+
+## Supported boards
+
+Several ESP32 variants work; the **XIAO ESP32-S3** is recommended. The [web flasher](https://lukeswitz.github.io/oui-spy-unified-blue/) lists everything currently supported — request others via an issue.
+
+| Board | Role | Bands | Web-flasher target | PlatformIO env |
+|---|---|---|---|---|
+| **XIAO ESP32-S3** ⭐ | NODE | 2.4 GHz | `node-xiao_s3` | `v3_app_controlled` |
+| ESP32-S3 N16R8 DevKitC | NODE | 2.4 GHz | `node-s3_devkitc` | `v3_app_controlled_s3_devkitc` |
+| **XIAO ESP32-C5** | NODE | **2.4 + 5 GHz** | `node-xiao_c5` | `v3_app_controlled_c5` |
+| **XIAO ESP32-S3** ⭐ | MANAGER | — | `mgr-xiao_s3` | `v3_node_manager_s3` |
+| ESP32-S3 N16R8 DevKitC | MANAGER | — | `mgr-s3_devkitc` | `v3_node_manager_s3_devkitc` |
+| XIAO ESP32-C3 | MANAGER | — | `mgr-xiao_c3` | `v3_node_manager_xiao_c3` |
+| ESP32 WROOM | MANAGER | — | `mgr-wroom` | `v3_node_manager_wroom` |
+
+⭐ = recommended. The **ESP32-C5** is the only dual-band board — it adds 5 GHz (UNII-1 + UNII-3) scanning on top of 2.4 GHz; pick the band in *Settings → Config → WiFi band*.
+
+| Your gear | Flash |
 |---|---|
-| **One board** | **NODE** `node-xiao_s3` |
-| **Several boards** | **NODE** on every board except the one you connect the app to; **MANAGER** on that one |
+| **One board** | **NODE** (`node-xiao_s3`, or `node-xiao_c5` for 5 GHz) |
+| **Several boards** | **NODE** on every board except the one you connect the app to; **MANAGER** on that one (`mgr-xiao_s3` — its PSRAM holds a deep buffer) |
 
 ---
 
 ## Quick start
 
-1. **Flash** — open the [web flasher](https://lukeswitz.github.io/oui-spy-unified-blue/) in Chrome or Edge, plug in via USB-C, keep the default **NODE** target, hit **Connect & Flash**. One time only; after that the app updates it over the air.
+1. **Flash** — open the [web flasher](https://lukeswitz.github.io/oui-spy-unified-blue/) in Chrome or Edge, plug in via USB-C, pick your [board target](#supported-boards) (default **NODE**), hit **Connect & Flash**. One time only; after that the app updates it over the air.
 2. **Install the app** — [Android APK](https://github.com/lukeswitz/oui-spy-unified-blue/releases/latest) · [iOS / macOS TestFlight](https://testflight.apple.com/join/5RCKgnJ2) · [macOS signed build](https://github.com/lukeswitz/oui-spy-unified-blue/releases/latest).
 3. **Connect** — open the app, tap **CONNECT**, pick your board from the scan list.
 
@@ -53,7 +88,7 @@ Auto-connect is off by default (*Settings → Config → Connection → Auto-con
 
 ---
 
-## Engines
+## The engines
 
 Eight engines, toggled from the home screen. They run together on whatever radios each needs.
 
@@ -68,11 +103,11 @@ Eight engines, toggled from the home screen. They run together on whatever radio
 | **Wardrive** | WiFi + BLE | Every AP + BLE device, WiGLE-style, GPS-stamped |
 | **PCAP** | WiFi *or* BLE | Raw 802.11 or BLE link-layer frames to a `.pcap` |
 
-Detail on each is in [Detection internals](#detection-internals).
+How each engine works under the hood is in [Detection internals](#detection-internals).
 
 ---
 
-## The app
+## Using the app
 
 Flutter app for iOS, macOS, and Android.
 
@@ -97,7 +132,7 @@ Flutter app for iOS, macOS, and Android.
 
 **Wardrive accounts** — link **WiGLE** (API name + token) and **WDGWars** (64-char API key) at the top of *Settings → Config*. Each shows live stats — WiGLE rank / WiFi / BT counts; WDGWars networks, badges, gang, and your rolling 24 h new-AP quota — and a condensed strip on the home screen links back to the full view.
 
-**Settings** — appearance, units, scan timing, channel range, the OUI vendor database (with WiGLE CSV import), WiGLE + WDGWars accounts, buzzer/LED, station-mode WiFi, watchlist, ignore list, factory reset, and database export/import for backing up captures.
+**Settings** — appearance, units, scan timing, channel range, WiFi band (2.4 / 5 GHz / both — 5 GHz on the dual-band ESP32-C5 node), the OUI vendor database (with WiGLE CSV import), WiGLE + WDGWars accounts, buzzer/LED, station-mode WiFi, watchlist, ignore list, factory reset, and database export/import for backing up captures.
 
 <img width="1133" alt="Settings" src="https://github.com/user-attachments/assets/b8072937-67fb-4ae3-adc0-d1c748a26983" />
 
@@ -105,13 +140,13 @@ Flutter app for iOS, macOS, and Android.
 
 ---
 
-## Mesh (multiple boards)
+## Mesh — multiple boards
 
 Flash the board you connect the app to as a **manager** (`mgr-xiao_s3` — its PSRAM holds a deep detection buffer) and every other board as a **node**. Power them on; nodes auto-join in ~10 s with no pairing. Connect the app to the manager.
 
 - Detection runs across **all nodes**; every hit is tagged with the node that found it.
 - The manager splits the WiFi channel range across nodes to cover the band faster.
-- Manager settings (buzzer, LED, alert timing, ignore list, wardrive radio) push to every node and override their local copies.
+- Manager settings (buzzer, LED, alert timing, ignore list, wardrive radio, WiFi band) push to every node and override their local copies.
 - The manager does not scan — it coordinates and aggregates. All detection comes from nodes.
 - With Offline Scan on, the manager persists its commanded engine set so a manager reboot restores it and re-commands the nodes.
 
@@ -131,15 +166,15 @@ Flash the board you connect the app to as a **manager** (`mgr-xiao_s3` — its P
 
 **UniPwn** — Unitree robots by BLE name prefix (`Go2_`, `G1_`, `H1_`, `B2_`, `X1_`): detect → connect → exploit actions.
 
-**Wardrive** — logs every AP + BLE device (SSID, BSSID, channel, decoded auth mode), GPS-stamped, WiGLE-compatible.
+**Wardrive** — logs every AP + BLE device (SSID, BSSID, channel, decoded auth mode), GPS-stamped, WiGLE-compatible. On the ESP32-C5 it sweeps 2.4 GHz **and** 5 GHz UNII channels.
 
 ---
 
 ## Flashing & hardware
 
-Routine updates come from the app over OTA. The web flasher is for the first flash on a bare board, or recovery.
+Routine updates come from the app over OTA. The web flasher is for the **first flash on a bare board**, or recovery.
 
-**Web flasher** — [lukeswitz.github.io/oui-spy-unified-blue](https://lukeswitz.github.io/oui-spy-unified-blue/), Chrome / Edge 89+ (Web Serial). Plug in via USB-C, pick the target (NODE is the default), Connect & Flash.
+**Web flasher** — [lukeswitz.github.io/oui-spy-unified-blue](https://lukeswitz.github.io/oui-spy-unified-blue/), Chrome / Edge 89+ (Web Serial). Plug in via USB-C, pick the [target](#supported-boards) (NODE is the default), **Connect & Flash**. The flasher handles per-chip bootloader offsets automatically (e.g. the ESP32-C5 bootloader lives at `0x2000`), so you don't need to think about them.
 
 **Optional on-board GPS** — a node normally gets location from the phone over BLE. Wire a serial GPS module (NEO-6M / NEO-8M, 9600 baud) and the node self-locates with no phone — useful for standalone / offline wardriving. When the module has a fix it takes priority over phone GPS; unplug it and the node falls back to the phone automatically (5 s timeout).
 
@@ -152,16 +187,19 @@ Routine updates come from the app over OTA. The web flasher is for the first fla
 
 Pins are per-board — override with `-DPIN_GPS_RX=` / `-DPIN_GPS_TX=` for other variants. Serial detections (`lat`/`lon`/`sats`) print on the module's first fix.
 
+---
 
+## Build from source
 
 <details>
-<summary><b>Build from source</b></summary>
+<summary><b>Firmware (PlatformIO)</b></summary>
 
-### Firmware (PlatformIO)
 ```bash
 pio run -e v3_app_controlled             # node (XIAO ESP32-S3)
 pio run -e v3_app_controlled_s3_devkitc  # node (ESP32-S3 N16R8 DevKitC)
+pio run -e v3_app_controlled_c5          # node (XIAO ESP32-C5, dual-band 2.4+5GHz)
 pio run -e v3_node_manager_s3            # manager (XIAO ESP32-S3)
+pio run -e v3_node_manager_s3_devkitc    # manager (ESP32-S3 N16R8 DevKitC)
 pio run -e v3_node_manager_xiao_c3       # manager (XIAO ESP32-C3)
 pio run -e v3_node_manager_wroom         # manager (ESP32 WROOM)
 pio run -e v3_app_controlled -t upload   # flash node
@@ -169,7 +207,11 @@ pio device monitor                       # serial @ 115200
 ```
 Dependency: `NimBLE-Arduino`.
 
-### App (Flutter 3.32+)
+</details>
+
+<details>
+<summary><b>App (Flutter 3.32+)</b></summary>
+
 ```bash
 cd companion
 flutter pub get
@@ -181,8 +223,12 @@ flutter build macos --release
 
 </details>
 
+---
+
+## Dependencies & services
+
 <details>
-<summary><b>Dependencies & services</b></summary>
+<summary><b>Libraries & services</b></summary>
 
 **Firmware:** [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino), [Adafruit NeoPixel](https://github.com/adafruit/Adafruit_NeoPixel), [ArduinoJson](https://github.com/bblanchon/ArduinoJson), [TinyGPS++](https://github.com/mikalhart/TinyGPSPlus). ESP-IDF WiFi promiscuous + ESP-NOW + mbedTLS AES-GCM mesh.
 
@@ -192,8 +238,11 @@ flutter build macos --release
 
 </details>
 
-<details>
-<summary><b>Ecosystem (standalone forks)</b></summary>
+---
+
+## Ecosystem
+
+Standalone single-purpose forks that OUI-APEX unifies:
 
 | Project | What |
 |---|---|
@@ -203,8 +252,6 @@ flutter build macos --release
 | [Sky-Spy](https://github.com/colonelpanichacks/Sky-Spy) | Drone Remote ID capture |
 | [Remote-ID-Spoofer](https://github.com/colonelpanichacks/Remote-ID-Spoofer) | WiFi Remote ID spoofer + swarm |
 | [OUI-SPY UniPwn](https://github.com/colonelpanichacks/Oui-Spy-UniPwn) | Unitree robot exploitation |
-
-</details>
 
 ---
 
@@ -221,4 +268,3 @@ flutter build macos --release
 ## Disclaimer
 
 Security-research and privacy-auditing tool. Detecting surveillance hardware in public is legal in most jurisdictions; comply with local laws on wireless scanning and interception. GATT exploitation actions carry risk. Lawful use only — authors not responsible for misuse.
-</content>
