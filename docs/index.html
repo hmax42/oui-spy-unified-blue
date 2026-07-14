@@ -441,6 +441,7 @@
                 style="width:100%;padding:10px;margin-bottom:12px;background:var(--surface-light);color:var(--text-primary);border:1px solid var(--border);font-family:inherit;font-size:13px;">
           <option value="node-xiao_s3">XIAO ESP32-S3 — NODE (scanner) — recommended</option>
           <option value="node-s3_devkitc">ESP32-S3 N16R8 DevKitC — NODE (scanner)</option>
+          <option value="node-xiao_c5">XIAO ESP32-C5 — NODE (scanner, 2.4+5GHz dual-band)</option>
           <option value="mgr-xiao_s3">XIAO ESP32-S3 — MANAGER (multi-node hub, no scan)</option>
           <option value="mgr-s3_devkitc">ESP32-S3 N16R8 DevKitC — MANAGER (multi-node hub, no scan)</option>
           <option value="mgr-xiao_c3">XIAO ESP32-C3 — MANAGER (multi-node hub, no scan)</option>
@@ -514,6 +515,12 @@
         label: 'ESP32-S3 N16R8 DevKitC (node)',
         path: 'node-s3_devkitc/',
         flashSize: '16MB', flashMode: 'qio', flashFreq: '80m',
+      },
+      'node-xiao_c5': {
+        label: 'XIAO ESP32-C5 (node, dual-band 2.4+5GHz)',
+        path: 'node-xiao_c5/',
+        flashSize: '8MB', flashMode: 'dio', flashFreq: '80m',
+        bootloaderOffset: 0x2000,
       },
       'mgr-xiao_s3': {
         label: 'XIAO ESP32-S3 — MANAGER (multi-node hub)',
