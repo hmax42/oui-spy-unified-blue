@@ -242,6 +242,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     final isImperial = unitSystem == UnitSystem.imperial;
     final use24Hour = ref.watch(use24HourTimeProvider);
     final t = AppTheme.of(context);
+    final isC5 = ref.watch(bleManagerProvider).board == 'xiao_c5';
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -312,17 +313,18 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
         ),
         const _ScanTimingSliders(),
 
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'WIFI BAND'),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8, left: 2),
-          child: Text(
-            '5GHz needs a dual-band node (ESP32-C5). 5GHz sweeps UNII-1 + UNII-3; '
-            'applies to all WiFi engines.',
-            style: TextStyle(color: t.textDim, fontSize: 11),
+        if (isC5) ...[
+          const SizedBox(height: 16),
+          const ConfigSectionHeader(label: 'WIFI BAND'),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8, left: 2),
+            child: Text(
+              '5GHz sweeps UNII-1 + UNII-3; applies to all WiFi engines.',
+              style: TextStyle(color: t.textDim, fontSize: 11),
+            ),
           ),
-        ),
-        const _WifiBandSelector(),
+          const _WifiBandSelector(),
+        ],
 
         const SizedBox(height: 16),
         const ConfigSectionHeader(label: 'CHANNEL RANGE'),
