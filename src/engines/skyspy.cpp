@@ -357,7 +357,7 @@ static void skyspyStart(void) {
     bool wantWifi = (skyspyRadioMask & 0x01) != 0;
     bool wantBle  = (skyspyRadioMask & 0x02) != 0;
     if (wantWifi) {
-        if (!meshIsEnabled()) {
+        if (wifiNeedsStaBringup()) {
             WiFi.mode(WIFI_STA);
         }
         // MGMT only — ODID (NAN/Beacon) travels in mgmt frames; DATA/CTRL would

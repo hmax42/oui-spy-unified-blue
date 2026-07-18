@@ -2154,10 +2154,10 @@ void bleGattInit(void) {
     }
 #endif
 
+    char devName[24];
     {
         uint8_t bmac[6];
         esp_read_mac(bmac, ESP_MAC_BT);
-        char devName[24];
 #ifdef OUISPY_ROLE_MANAGER
         snprintf(devName, sizeof(devName), "OUI-SPY-MGR-%02X%02X", bmac[4], bmac[5]);
 #else
@@ -2350,8 +2350,9 @@ void bleGattInit(void) {
 #ifndef OUISPY_NIMBLE2
     adv->setScanResponse(true);
 #endif
-    adv->start();
-
+    if (!adv->start()) {
+        Serial.println("[BLE] WARNING: advertising failed to start");
+    }
     Serial.println("[BLE] GATT server started, advertising as OUI-SPY");
 }
 

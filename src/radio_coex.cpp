@@ -4,6 +4,52 @@
 #include "wifi_ota_handler.h"
 #include <Arduino.h>
 #include "esp_bt.h"
+#include <WiFi.h>
+#include "mesh_espnow.h"
+#ifdef OUISPY_NIMBLE2
+#include <esp_event.h>
+#include <esp_netif.h>
+#include <nvs_flash.h>
+
+static bool g_c5WifiUp = false;
+void c5WifiInitNetif(void) {
+    esp_netif_init();
+    esp_err_t le = esp_event_loop_create_default();
+    if (le != ESP_OK && le != ESP_ERR_INVALID_STATE) {
+        Serial.printf("[COEX] event loop rc=0x%x\n", (int)le);
+    }
+    nvs_flash_init();
+}
+static void c5WifiUp(void) {
+    if (g_c5WifiUp) return;
+    size_t dma = heap_caps_get_free_size(MALLOC_CAP_DMA);
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    cfg.nvs_enable = 0;
+    esp_err_t irc = esp_wifi_init(&cfg);
+    if (irc != ESP_OK) {
+        Serial.printf("[COEX] C5 WiFi init FAILED dma=%u init=0x%x\n", (unsigned)dma, (int)irc);
+        return;
+    }
+    esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_err_t src = esp_wifi_start();
+    if (src != ESP_OK) {
+        esp_wifi_deinit();
+        Serial.printf("[COEX] C5 WiFi start FAILED dma=%u start=0x%x\n", (unsigned)dma, (int)src);
+        return;
+    }
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    g_c5WifiUp = true;
+    Serial.printf("[COEX] C5 WiFi up dma=%u init=0x%x\n", (unsigned)dma, (int)irc);
+}
+static void c5WifiDown(void) {
+    if (!g_c5WifiUp) return;
+    esp_wifi_stop();
+    esp_wifi_deinit();
+    g_c5WifiUp = false;
+    Serial.println("[COEX] C5 WiFi down");
+}
+#endif
 
 void wifiSnifferApplyPs(void) {
     if (esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_ENABLED) {
@@ -11,6 +57,11 @@ void wifiSnifferApplyPs(void) {
     } else {
         esp_wifi_set_ps(WIFI_PS_NONE);
     }
+}
+
+bool wifiNeedsStaBringup(void) {
+    if (meshIsEnabled()) return false;
+    return WiFi.getMode() != WIFI_MODE_STA;
 }
 
 static uint8_t g_wifiBandMask = WIFI_BAND_24 | WIFI_BAND_5;
@@ -87,11 +138,16 @@ void wifiCoexRegister(WifiRxParser parser, uint32_t filterMask) {
     first = (g_count == 1);
     portEXIT_CRITICAL(&g_mux);
 
-    wifiCoexApplyFilter();
     if (first) {
+#ifdef OUISPY_NIMBLE2
+        c5WifiUp();
+#endif
         wifiStaReleaseForScan();
+        wifiCoexApplyFilter();
         esp_wifi_set_promiscuous(true);
         esp_wifi_set_promiscuous_rx_cb(wifiCoexDispatch);
+    } else {
+        wifiCoexApplyFilter();
     }
     Serial.printf("[COEX] wifi register (count=%d)\n", g_count);
 }
@@ -118,6 +174,9 @@ void wifiCoexUnregister(WifiRxParser parser) {
     if (empty) {
         esp_wifi_set_promiscuous_rx_cb(NULL);
         esp_wifi_set_promiscuous(false);
+#ifdef OUISPY_NIMBLE2
+        c5WifiDown();
+#endif
     } else {
         wifiCoexApplyFilter();
     }

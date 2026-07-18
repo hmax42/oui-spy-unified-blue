@@ -1083,7 +1083,11 @@ void setup() {
     ignoreListInit();
 
     // Create FreeRTOS queues
+#ifdef OUISPY_NIMBLE2
+    detectionQueue = xQueueCreate(32, sizeof(DetectionEvent));
+#else
     detectionQueue = xQueueCreate(128, sizeof(DetectionEvent));
+#endif
     engineCmdQueue = xQueueCreate(8, sizeof(EngineCommand));
     chimeQueue = xQueueCreate(1, sizeof(uint8_t));
 
@@ -1111,20 +1115,33 @@ void setup() {
     Serial.printf("[INIT] Active mask after boot disable: 0x%02X\n", engineGetActiveMask());
 
     // Initialize mesh subsystem
+#ifdef OUISPY_NIMBLE2
+    Serial.printf("[MEM] pre-BLE dmaFree=%u internalFree=%u\n",
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    c5WifiInitNetif();
+    bleGattInit();
+    hwGpsInit();
+    meshInit();
+#else
     hwGpsInit();
     meshInit();
 
     bleGattInit();
+#endif
 
     Serial.println("[INIT] WiFi STA reserved for OTA mode only — mesh stays on ch1");
 
     // Create FreeRTOS tasks
-    xTaskCreatePinnedToCore(detectionNotifyTask, "det_notify", 4096, NULL, 2, NULL, 1);
-    xTaskCreatePinnedToCore(engineCmdTask, "eng_cmd", 4096, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(statusHeartbeatTask, "status_hb", 6144, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(chimeTaskFn, "chime", 2048, NULL, 1, NULL, 1);
+    BaseType_t t1 = xTaskCreatePinnedToCore(detectionNotifyTask, "det_notify", 4096, NULL, 2, NULL, 1);
+    BaseType_t t2 = xTaskCreatePinnedToCore(engineCmdTask, "eng_cmd", 4096, NULL, 1, NULL, 1);
+    BaseType_t t3 = xTaskCreatePinnedToCore(statusHeartbeatTask, "status_hb", 6144, NULL, 1, NULL, 1);
+    BaseType_t t4 = xTaskCreatePinnedToCore(chimeTaskFn, "chime", 2048, NULL, 1, NULL, 1);
 
-    Serial.println("[INIT] Tasks created");
+    Serial.printf("[INIT] Tasks created det=%d cmd=%d hb=%d chime=%d internalFree=%u dmaFree=%u\n",
+                  (int)t1, (int)t2, (int)t3, (int)t4,
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA));
 
     // Boot melody
     playBootMelody();
@@ -1139,6 +1156,7 @@ void setup() {
 
 #ifndef OUISPY_ENGINE_SELFTEST
 #ifndef OUISPY_COEX_STRESS
+#ifndef OUISPY_NIMBLE2
     {
         MeshConfig cfg = {};
         cfg.enabled = 1;
@@ -1147,6 +1165,7 @@ void setup() {
         meshEnable(&cfg);
         Serial.println("[INIT] mesh auto-enabled (plaintext broadcast, manager-controlled)");
     }
+#endif
 #endif
 #ifdef OUISPY_SPOOL_LIVETEST
     meshDisable();
@@ -1194,7 +1213,7 @@ void setup() {
     Serial.println("[INIT] ENGINE DIAG armed (cycles all engines, mesh auto-enabled — standalone repro)");
 #endif
 #else
-    xTaskCreatePinnedToCore(engineSelftestTask, "selftest", 8192, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(engineSelftestTask, "selftest", 4096, NULL, 1, NULL, 1);
     Serial.println("[INIT] ENGINE SELF-TEST mode (mesh disabled)");
 #endif
 

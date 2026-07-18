@@ -421,7 +421,7 @@ static void pcapStart(void) {
 
     if (pcapMode == PCAP_MODE_WIFI) {
         bool meshOn = meshIsEnabled();
-        if (!meshOn) {
+        if (wifiNeedsStaBringup()) {
             WiFi.mode(WIFI_STA);
             WiFi.disconnect(false, false);
             vTaskDelay(pdMS_TO_TICKS(50));

@@ -6,6 +6,10 @@ typedef void (*WifiRxParser)(void* buf, wifi_promiscuous_pkt_type_t type);
 
 void wifiCoexRegister(WifiRxParser parser, uint32_t filterMask);
 void wifiCoexUnregister(WifiRxParser parser);
+#ifdef OUISPY_NIMBLE2
+void c5WifiInitNetif(void);
+bool wifiNeedsStaBringup(void);
+#endif
 bool wifiCoexActive(void);
 bool wifiCoexShouldHop(int engineId);
 

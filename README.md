@@ -197,7 +197,8 @@ Pins are per-board — override with `-DPIN_GPS_RX=` / `-DPIN_GPS_TX=` for other
 ```bash
 pio run -e v3_app_controlled             # node (XIAO ESP32-S3)
 pio run -e v3_app_controlled_s3_devkitc  # node (ESP32-S3 N16R8 DevKitC)
-pio run -e v3_app_controlled_c5          # node (XIAO ESP32-C5, dual-band 2.4+5GHz)
+./build_c5.sh                            # node (XIAO ESP32-C5, dual-band 2.4+5GHz)
+./build_c5.sh -t upload                  # flash the C5 node
 pio run -e v3_node_manager_s3            # manager (XIAO ESP32-S3)
 pio run -e v3_node_manager_s3_devkitc    # manager (ESP32-S3 N16R8 DevKitC)
 pio run -e v3_node_manager_xiao_c3       # manager (XIAO ESP32-C3)
@@ -206,6 +207,11 @@ pio run -e v3_app_controlled -t upload   # flash node
 pio device monitor                       # serial @ 115200
 ```
 Dependency: `NimBLE-Arduino`.
+
+The XIAO ESP32-C5 uses the pioarduino platform (Arduino 3.x / IDF 5.5, NimBLE 2.x). `build_c5.sh`
+builds it in an isolated `PLATFORMIO_CORE_DIR` (`~/.platformio-c5`) so its framework/toolchain never
+clobber the shared `~/.platformio` packages used by the standard-platform S3/C3/WROOM envs. CI builds
+each env on a fresh runner with a per-env cache, so it is already isolated there.
 
 </details>
 

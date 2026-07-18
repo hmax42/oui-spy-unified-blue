@@ -1381,11 +1381,14 @@ void meshInit(void) {
     if (esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK) meshAddFleetMac(mac);
     if (esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP) == ESP_OK) meshAddFleetMac(mac);
 
+#ifndef OUISPY_NIMBLE2
     meshTxQueue = xQueueCreate(MESH_TX_QUEUE_DEPTH, sizeof(MeshTxItem));
     if (!meshTxQueue) {
         Serial.println("[MESH] tx queue create FAIL");
     }
+#endif
 #ifndef OUISPY_ROLE_MANAGER
+#ifndef OUISPY_NIMBLE2
     meshRxQueue = xQueueCreate(8, sizeof(MeshRxItem));
     if (!meshRxQueue) {
         Serial.println("[MESH] rx queue create FAIL");
@@ -1396,10 +1399,13 @@ void meshInit(void) {
     }
     xTaskCreate(meshRxWorkerFn, "meshRxWk", 6144, NULL, 4, &meshRxWorkerHandle);
 #endif
+#endif
+#ifndef OUISPY_NIMBLE2
     xTaskCreate(retryTaskFn, "meshRetry", 4096, NULL, 1, &retryTaskHandle);
     xTaskCreate(meshTxTaskFn, "meshTx", 4096, NULL, 3, &meshTxTaskHandle);
 #ifndef OUISPY_ROLE_MANAGER
     xTaskCreatePinnedToCore(meshSchedTaskFn, "meshSched", 4096, NULL, 2, &meshSchedTaskHandle, 0);
+#endif
 #endif
 #if defined(OUISPY_NETCOUNT) && !defined(OUISPY_ROLE_MANAGER)
     xTaskCreate(ncInjectTaskFn, "ncInject", 4096, NULL, 1, NULL);

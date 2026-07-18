@@ -526,7 +526,7 @@ static void wardriveStart(void) {
     lastChannelHop = millis();
 
     if (wardriveRadio & 0x01) {
-        if (!meshIsEnabled()) {
+        if (wifiNeedsStaBringup()) {
             WiFi.mode(WIFI_STA);
             WiFi.disconnect(false, false);
             vTaskDelay(pdMS_TO_TICKS(50));

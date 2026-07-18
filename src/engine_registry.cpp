@@ -130,10 +130,12 @@ void engineDisableAll(void) {
         states[i] = ESTATE_DISABLED;
     }
     // Force-stop any lingering BLE scan to free the radio for GATT
-    NimBLEScan* scan = NimBLEDevice::getScan();
-    if (scan && scan->isScanning()) {
-        scan->stop();
-        Serial.println("[ENGINE] Force-stopped BLE scan");
+    if (NimBLEDevice::getInitialized()) {
+        NimBLEScan* scan = NimBLEDevice::getScan();
+        if (scan && scan->isScanning()) {
+            scan->stop();
+            Serial.println("[ENGINE] Force-stopped BLE scan");
+        }
     }
     Serial.println("[ENGINE] All engines disabled");
     if (engineMux) xSemaphoreGiveRecursive(engineMux);
