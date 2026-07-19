@@ -488,20 +488,17 @@ class WardriveController extends ChangeNotifier {
   }
 
   Future<void> onChipTap(WardriveTarget t, Set<WardriveTarget> liveTargets) async {
-    if (!isActive && liveTargets.isEmpty) {
-      toggleTarget(t);
+    if (state != WardriveState.running) {
+      if (selectedTargets.contains(t)) {
+        selectedTargets.remove(t);
+      } else {
+        selectedTargets.add(t);
+      }
+      notifyListeners();
+      _savePrefs();
       return;
     }
-    if (state != WardriveState.running) {
-      _userStopped = false;
-      selectedTargets
-        ..clear()
-        ..addAll(liveTargets);
-      state = WardriveState.running;
-      await _ensureLoggingAttached();
-      notifyListeners();
-    }
-    if (liveTargets.contains(t)) {
+    if (selectedTargets.contains(t)) {
       await _removeTargetLive(t);
     } else {
       await _addTargetLive(t);

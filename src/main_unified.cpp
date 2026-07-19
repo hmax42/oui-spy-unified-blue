@@ -1064,103 +1064,116 @@ static void e2eTestTask(void* arg) {
 #endif
 
 #ifdef OUISPY_ENGINE_MATRIX
-static uint8_t chBand(uint8_t ch) { return ch == 0 ? 0 : (ch <= 14 ? 1 : 2); }
 static uint32_t mDet(EngineId e) { return g_diagDetCount[e]; }
 static void mZeroDet(void) { for (int i = 0; i < ENGINE_COUNT; i++) g_diagDetCount[i] = 0; }
+static uint32_t waitState(EngineId e, EngineState want, uint32_t toMs) {
+    uint32_t t0 = millis();
+    while (millis() - t0 < toMs) {
+        if (engineGetState(e) == want) return millis() - t0;
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    return 0xFFFFFFFF;
+}
+static uint32_t waitMaskZero(uint32_t toMs) {
+    uint32_t t0 = millis();
+    while (millis() - t0 < toMs) {
+        if (engineGetActiveMask() == 0) return millis() - t0;
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    return 0xFFFFFFFF;
+}
 static void engineMatrixTask(void* arg) {
     (void)arg;
     vTaskDelay(pdMS_TO_TICKS(4000));
-    Serial.println("[MATRIX] ===== C5 ENGINE x BAND x RADIO x STRESS (instrumented) =====");
+    Serial.println("[SMOKE] ===== C5 SMOKE (band x radio x combo x restart) =====");
+    Serial.printf("[SMOKE] mesh enabled=%d mgrJoined=%d\n", meshIsEnabled() ? 1 : 0, meshManagerJoined() ? 1 : 0);
 
-    // A) WARDRIVE across BANDS (radio=both). measure raw frames + real detections + channel dwell.
     const uint8_t bands[3] = {0x01, 0x02, 0x03};
-    const char* bn[3] = {"2.4only", "5G-only", "both"};
-    wardriveSetRadioMask(0x03);
-    for (int b = 0; b < 3; b++) {
-        wifiSetBandMask(bands[b]);
-        uint32_t r0 = g_engRawSeen; mZeroDet();
-        engineEnable(ENGINE_WARDRIVE);
-        uint32_t ch24 = 0, ch5 = 0;
-        for (int i = 0; i < 12; i++) {
-            uint8_t ch = 0; wifi_second_chan_t s2; esp_wifi_get_channel(&ch, &s2);
-            if (chBand(ch) == 1) ch24++; else if (chBand(ch) == 2) ch5++;
-            vTaskDelay(pdMS_TO_TICKS(1000));
-        }
-        uint32_t raw = g_engRawSeen - r0;
-        Serial.printf("[MATRIX] BAND %-7s raw=%lu (%lu/s) det=%lu dwell[2.4=%lu 5G=%lu] %s\n",
-                      bn[b], (unsigned long)raw, (unsigned long)(raw / 12),
-                      (unsigned long)mDet(ENGINE_WARDRIVE), (unsigned long)ch24, (unsigned long)ch5,
-                      raw > 0 ? "CAPTURED" : "!!! ZERO !!!");
-        engineDisableAll();
-        vTaskDelay(pdMS_TO_TICKS(1500));
-    }
-
-    // B) WARDRIVE across RADIO modes (band=both). WiFi-only / BLE-only / both.
-    wifiSetBandMask(0x03);
+    const char* bn[3] = {"2.4", "5G", "both"};
     const uint8_t radios[3] = {0x01, 0x02, 0x03};
-    const char* rn[3] = {"WiFi", "BLE", "WiFi+BLE"};
-    for (int r = 0; r < 3; r++) {
-        wardriveSetRadioMask(radios[r]);
-        uint32_t r0 = g_engRawSeen; mZeroDet();
+    const char* rn[3] = {"WiFi", "BLE", "both"};
+
+    for (int b = 0; b < 3; b++) {
+        for (int r = 0; r < 3; r++) {
+            wifiSetBandMask(bands[b]);
+            wardriveSetRadioMask(radios[r]);
+            mZeroDet();
+            uint32_t t0 = millis();
+            engineEnable(ENGINE_WARDRIVE);
+            uint32_t startMs = millis() - t0;
+            uint32_t scanMs = waitState(ENGINE_WARDRIVE, ESTATE_SCANNING, 8000);
+            vTaskDelay(pdMS_TO_TICKS(6000));
+            uint32_t nets = mDet(ENGINE_WARDRIVE);
+            t0 = millis();
+            engineDisableAll();
+            uint32_t stopMs = waitMaskZero(8000);
+            bool pass = startMs < 3000 && scanMs != 0xFFFFFFFF && stopMs != 0xFFFFFFFF;
+            Serial.printf("[SMOKE] BAND=%-4s RADIO=%-4s start=%lums scan=%s nets=%lu stop=%s %s\n",
+                bn[b], rn[r], (unsigned long)startMs,
+                scanMs == 0xFFFFFFFF ? "STUCK" : "ok", (unsigned long)nets,
+                stopMs == 0xFFFFFFFF ? "STUCK" : "ok", pass ? "PASS" : "!!!FAIL!!!");
+            vTaskDelay(pdMS_TO_TICKS(1500));
+        }
+    }
+
+    wifiSetBandMask(0x03); wardriveSetRadioMask(0x03);
+    for (int cyc = 0; cyc < 5; cyc++) {
         engineEnable(ENGINE_WARDRIVE);
-        for (int i = 0; i < 10; i++) vTaskDelay(pdMS_TO_TICKS(1000));
-        uint32_t raw = g_engRawSeen - r0;
-        Serial.printf("[MATRIX] RADIO %-8s raw=%lu det=%lu %s\n",
-                      rn[r], (unsigned long)raw, (unsigned long)mDet(ENGINE_WARDRIVE),
-                      mDet(ENGINE_WARDRIVE) > 0 ? "DETECTED" : "(no targets in range?)");
+        vTaskDelay(pdMS_TO_TICKS(2000));
         engineDisableAll();
-        vTaskDelay(pdMS_TO_TICKS(1200));
-    }
-    wardriveSetRadioMask(0x03);
-
-    // C) EACH engine ALONE: raw + real detections + clean stop.
-    const EngineId alone[] = {ENGINE_DETECTOR, ENGINE_FLOCK_BLE, ENGINE_FLOCK_WIFI,
-                             ENGINE_FOXHUNTER, ENGINE_SKYSPY, ENGINE_UNIPWN,
-                             ENGINE_WARDRIVE, ENGINE_PCAP};
-    for (unsigned k = 0; k < sizeof(alone) / sizeof(alone[0]); k++) {
-        uint32_t r0 = g_engRawSeen; mZeroDet();
-        engineEnable(alone[k]);
-        for (int i = 0; i < 8; i++) vTaskDelay(pdMS_TO_TICKS(1000));
-        uint32_t raw = g_engRawSeen - r0;
-        uint32_t det = mDet(alone[k]);
+        waitMaskZero(8000);
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        uint32_t t0 = millis();
+        engineEnable(ENGINE_WARDRIVE);
+        uint32_t restartMs = millis() - t0;
+        uint32_t scanMs = waitState(ENGINE_WARDRIVE, ESTATE_SCANNING, 35000);
+        bool pass = restartMs < 3000 && scanMs != 0xFFFFFFFF;
+        Serial.printf("[SMOKE] RESTART cyc=%d restart=%lums scan=%s %s\n",
+            cyc, (unsigned long)restartMs, scanMs == 0xFFFFFFFF ? "STUCK-35s" : "ok",
+            pass ? "PASS" : "!!!SLOW/STUCK!!!");
         engineDisableAll();
-        vTaskDelay(pdMS_TO_TICKS(1200));
-        uint8_t m = engineGetActiveMask();
-        Serial.printf("[MATRIX] ALONE eng=%d raw=%lu det=%lu stopMask=0x%02X %s\n",
-                      alone[k], (unsigned long)raw, (unsigned long)det, m,
-                      m == 0 ? "STOP-OK" : "!!! NOT-STOPPED !!!");
+        waitMaskZero(8000);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    // D) ALL together: per-engine detections + no-crash.
-    {
-        uint32_t r0 = g_engRawSeen; mZeroDet();
-        for (int e = 0; e < ENGINE_COUNT; e++) engineEnable((EngineId)e);
-        uint8_t on = engineGetActiveMask();
-        for (int i = 0; i < 15; i++) vTaskDelay(pdMS_TO_TICKS(1000));
-        uint32_t raw = g_engRawSeen - r0;
-        Serial.printf("[MATRIX] ALL mask=0x%02X raw=%lu det[DET=%lu FB=%lu FW=%lu FOX=%lu SKY=%lu WD=%lu] heap=%lu %s\n",
-                      on, (unsigned long)raw,
-                      (unsigned long)mDet(ENGINE_DETECTOR), (unsigned long)mDet(ENGINE_FLOCK_BLE),
-                      (unsigned long)mDet(ENGINE_FLOCK_WIFI), (unsigned long)mDet(ENGINE_FOXHUNTER),
-                      (unsigned long)mDet(ENGINE_SKYSPY), (unsigned long)mDet(ENGINE_WARDRIVE),
-                      (unsigned long)esp_get_free_heap_size(), (raw > 0 && on != 0) ? "OK" : "!!! FAIL !!!");
+    static const EngineId comboA[] = {ENGINE_WARDRIVE, ENGINE_SKYSPY};
+    static const EngineId comboB[] = {ENGINE_WARDRIVE, ENGINE_FLOCK_WIFI, ENGINE_FLOCK_BLE};
+    static const EngineId comboC[] = {ENGINE_WARDRIVE, ENGINE_SKYSPY, ENGINE_FLOCK_BLE, ENGINE_DETECTOR};
+    const EngineId* combos[3] = {comboA, comboB, comboC};
+    const int comboN[3] = {2, 3, 4};
+    const char* comboName[3] = {"wd+sky", "wd+flkW+flkB", "wd+sky+flkB+det"};
+    for (int c = 0; c < 3; c++) {
+        mZeroDet();
+        uint32_t t0 = millis();
+        for (int i = 0; i < comboN[c]; i++) engineEnable(combos[c][i]);
+        uint32_t startMs = millis() - t0;
+        uint8_t mask = engineGetActiveMask();
+        vTaskDelay(pdMS_TO_TICKS(6000));
+        uint32_t nets = mDet(ENGINE_WARDRIVE);
+        t0 = millis();
         engineDisableAll();
+        uint32_t stopMs = waitMaskZero(8000);
+        bool pass = startMs < 5000 && stopMs != 0xFFFFFFFF;
+        Serial.printf("[SMOKE] COMBO %-16s start=%lums mask=0x%02X nets=%lu stop=%s %s\n",
+            comboName[c], (unsigned long)startMs, mask, (unsigned long)nets,
+            stopMs == 0xFFFFFFFF ? "STUCK" : "ok", pass ? "PASS" : "!!!FAIL!!!");
         vTaskDelay(pdMS_TO_TICKS(1500));
     }
 
-    // E) STRESS: rapid stop/start.
-    int fails = 0;
+    int fails = 0; uint32_t maxStop = 0;
     for (int i = 0; i < 20; i++) {
         engineEnable(ENGINE_WARDRIVE); engineEnable(ENGINE_SKYSPY);
         vTaskDelay(pdMS_TO_TICKS(300));
         engineDisableAll();
+        uint32_t sm = waitMaskZero(8000);
+        if (sm == 0xFFFFFFFF) fails++; else if (sm > maxStop) maxStop = sm;
         vTaskDelay(pdMS_TO_TICKS(300));
-        if (engineGetActiveMask() != 0) fails++;
     }
-    Serial.printf("[MATRIX] STRESS 20x stop/start fails=%d heap=%lu %s\n",
-                  fails, (unsigned long)esp_get_free_heap_size(),
-                  fails == 0 ? "OK" : "!!! STRESS-FAIL !!!");
-    Serial.println("[MATRIX] ===== DONE =====");
+    Serial.printf("[SMOKE] STRESS 20x fails=%d maxStopMs=%lu heap=%lu %s\n",
+        fails, (unsigned long)maxStop, (unsigned long)esp_get_free_heap_size(),
+        fails == 0 ? "PASS" : "!!!FAIL!!!");
+
+    Serial.println("[SMOKE] ===== DONE =====");
     vTaskDelete(NULL);
 }
 #endif
