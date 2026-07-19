@@ -162,7 +162,7 @@ class WardriveController extends ChangeNotifier {
     _bleScanDuration = p.getInt('wd_bleScanDuration') ?? 800;
     _bleScanInterval = p.getInt('wd_bleScanInterval') ?? 3000;
     _channelStart = p.getInt('wd_channelStart') ?? 1;
-    _channelEnd = p.getInt('wd_channelEnd') ?? 11;
+    _channelEnd = p.getInt('wd_channelEnd') ?? 14;
     _wifiBand = WifiBand.values[
         (p.getInt('wd_wifiBand') ?? WifiBand.both.index)
             .clamp(0, WifiBand.values.length - 1)];
@@ -178,12 +178,14 @@ class WardriveController extends ChangeNotifier {
                 .firstWhere((t) => t != null, orElse: () => null))
             .whereType<WardriveTarget>());
     }
-    if (!(p.getBool('wd_dwellMaxNets_v4') ?? false)) {
-      _wifiScanInterval = 350;
-      _wifiDwellPerCh = 150;
+    if (!(p.getBool('wd_dwellFast_v6') ?? false)) {
+      _wifiScanInterval = 300;
+      _wifiDwellPerCh = 110;
+      _channelEnd = 14;
       await p.setInt('wd_wifiScanInterval', _wifiScanInterval);
       await p.setInt('wd_wifiDwellPerCh', _wifiDwellPerCh);
-      await p.setBool('wd_dwellMaxNets_v4', true);
+      await p.setInt('wd_channelEnd', _channelEnd);
+      await p.setBool('wd_dwellFast_v6', true);
     }
     notifyListeners();
   }
@@ -291,7 +293,7 @@ class WardriveController extends ChangeNotifier {
   int get channelStart => _channelStart;
   set channelStart(int v) { _channelStart = v.clamp(1, 14); notifyListeners(); _savePrefs(); _pushWardriveConfigLive(); }
 
-  int _channelEnd = 11;
+  int _channelEnd = 14;
   int get channelEnd => _channelEnd;
   set channelEnd(int v) { _channelEnd = v.clamp(_channelStart, 14); notifyListeners(); _savePrefs(); _pushWardriveConfigLive(); }
 
@@ -1133,6 +1135,10 @@ class WardriveController extends ChangeNotifier {
   /// ESP32 WiFi init can destabilize the NimBLE connection if BLE scan
   /// restarts too quickly; the resulting reconnect fires DISABLE_ALL.
   Future<void> _enableEnginesSequentially(List<Engine> engineList) async {
+    if (engineList.any((e) => e.isWifi)) {
+      await _ble.sendWifiBand(wifiBandMask);
+      await Future.delayed(const Duration(milliseconds: 80));
+    }
     for (final engine in engineList) {
       if (state == WardriveState.idle) return;
       if (engine == Engine.wardrive) {

@@ -836,7 +836,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
               Positioned(
                 top: 0, left: 0, right: 0,
                 child: Container(
-                  color: th.background.withValues(alpha: 0.96),
+                  color: t.background.withValues(alpha: 0.96),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,

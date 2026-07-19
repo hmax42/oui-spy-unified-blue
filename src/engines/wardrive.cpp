@@ -28,7 +28,7 @@ static unsigned long lastBleScan = 0;
 static volatile uint8_t wardriveRadio = 0x03;
 
 static uint8_t channelStart = 1;
-static uint8_t channelEnd   = 11;
+static uint8_t channelEnd   = 14;
 static unsigned long lastChannelHop = 0;
 
 #ifdef OUISPY_DUAL_BAND
@@ -37,8 +37,8 @@ static const uint8_t kDualBandChannels[] = {
 };
 #endif
 
-static uint16_t priorityDwellMs = 350;
-static uint16_t normalDwellMs   = 150;
+static uint16_t priorityDwellMs = 300;
+static uint16_t normalDwellMs   = 110;
 
 static uint8_t  hopSchedule[32];
 static uint16_t hopDwellMs[32];
@@ -53,7 +53,7 @@ static volatile uint32_t wifiLastNetMs = 0;
 #define MESH_RENDEZVOUS_DWELL_MS 40
 
 static bool isPriorityChannel(uint8_t ch) {
-    return ch == 1 || ch == 6 || ch == 11;
+    return ch == 1 || ch == 6 || ch == 11 || ch == 44 || ch == 149 || ch == 157;
 }
 
 static uint16_t scanDwellForChannel(uint8_t ch) {
@@ -71,7 +71,6 @@ static void buildHopSchedule(void) {
     }
 #else
     for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < 32; c++) {
-        if (!wifiChanEnabled((uint8_t)c)) continue;
         hopSchedule[hopScheduleLen] = (uint8_t)c;
         hopDwellMs[hopScheduleLen] = scanDwellForChannel((uint8_t)c);
         hopScheduleLen++;
@@ -754,6 +753,11 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
 uint16_t wardriveGetBleScanDurationMs(void) { return bleScanDurationMs; }
 uint16_t wardriveGetBleScanIntervalMs(void) { return bleScanIntervalMs; }
 uint8_t  wardriveGetRadio(void) { return wardriveRadio; }
+
+void wardriveSetDwell(uint16_t pri, uint16_t norm) {
+    priorityDwellMs = pri < 50 ? 50 : pri;
+    normalDwellMs = norm < 50 ? 50 : norm;
+}
 
 void wardriveSetRadioMask(uint8_t mask) {
     uint8_t m = mask & 0x03;

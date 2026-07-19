@@ -69,14 +69,18 @@ void wifiSetBandMask(uint8_t mask) {
 uint8_t wifiGetBandMask(void) { return g_wifiBandMask; }
 
 bool wifiChanEnabled(uint8_t ch) {
+#ifdef OUISPY_DUAL_BAND
     return (ch <= 14) ? (g_wifiBandMask & WIFI_BAND_24) != 0
                       : (g_wifiBandMask & WIFI_BAND_5) != 0;
+#else
+    return ch <= 14;
+#endif
 }
 
 void wifiApplyRegdomain(void) {
 #ifdef OUISPY_DUAL_BAND
     if (g_wifiBandMask & WIFI_BAND_5) {
-        wifi_country_t c = { .cc = "US", .schan = 1, .nchan = 165,
+        wifi_country_t c = { .cc = "US", .schan = 1, .nchan = 11,
                              .max_tx_power = 20, .policy = WIFI_COUNTRY_POLICY_MANUAL };
         esp_wifi_set_country(&c);
         return;
