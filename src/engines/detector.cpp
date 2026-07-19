@@ -551,7 +551,7 @@ static void detectorStart(void) {
     }
 
     if (!wardriveOwns && wantWifi) {
-        if (wifiNeedsStaBringup()) {
+        if (!meshIsEnabled()) {
             WiFi.mode(WIFI_STA);
         }
         wifiSnifferApplyPs();
@@ -620,7 +620,7 @@ void detectorHostSuspend(bool suspend) {
         }
         if ((detectorRadioMask & 0x01) &&
             (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON))) {
-            if (wifiNeedsStaBringup()) WiFi.mode(WIFI_STA);
+            if (!meshIsEnabled()) WiFi.mode(WIFI_STA);
             wifiSnifferApplyPs();
             wifiCoexRegister(wifiSnifferCb, WIFI_PROMIS_FILTER_MASK_MGMT);
         }

@@ -176,7 +176,7 @@ static void flockWifiStart(void) {
         Serial.println("[FLOCK-WIFI] Started (radio-gated off — node is BLE-only)");
         return;
     }
-    if (wifiNeedsStaBringup()) {
+    if (!meshIsEnabled()) {
         WiFi.mode(WIFI_STA);
     }
     wifiSnifferApplyPs();
@@ -249,7 +249,7 @@ void flockWifiHostSuspend(bool suspend) {
     if (suspend) {
         wifiCoexUnregister(wifiSnifferCb);
     } else if (scanning && flockWifiRadioGate) {
-        if (wifiNeedsStaBringup()) WiFi.mode(WIFI_STA);
+        if (!meshIsEnabled()) WiFi.mode(WIFI_STA);
         wifiSnifferApplyPs();
         wifiCoexRegister(wifiSnifferCb,
                          WIFI_PROMIS_FILTER_MASK_MGMT | WIFI_PROMIS_FILTER_MASK_DATA);

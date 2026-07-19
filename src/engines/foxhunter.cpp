@@ -252,7 +252,7 @@ static void foxhunterStart(void) {
 
     // WiFi promiscuous only when wardrive doesn't own WiFi
     if (!wardriveOwns) {
-        if (wifiNeedsStaBringup()) {
+        if (!meshIsEnabled()) {
             WiFi.mode(WIFI_STA);
         }
         // MGMT+DATA only. CTRL frames (ACK/CTS/RTS/BlockAck) outnumber legit

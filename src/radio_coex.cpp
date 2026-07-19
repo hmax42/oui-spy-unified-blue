@@ -4,9 +4,8 @@
 #include "wifi_ota_handler.h"
 #include <Arduino.h>
 #include "esp_bt.h"
-#include <WiFi.h>
-#include "mesh_espnow.h"
 #ifdef OUISPY_NIMBLE2
+#include <WiFi.h>
 #include <esp_event.h>
 #include <esp_netif.h>
 #include <nvs_flash.h>
@@ -42,7 +41,7 @@ static void c5WifiUp(void) {
     g_c5WifiUp = true;
     Serial.printf("[COEX] C5 WiFi up dma=%u init=0x%x\n", (unsigned)dma, (int)irc);
 }
-static void c5WifiDown(void) {
+static void __attribute__((unused)) c5WifiDown(void) {
     if (!g_c5WifiUp) return;
     esp_wifi_stop();
     esp_wifi_deinit();
@@ -57,11 +56,6 @@ void wifiSnifferApplyPs(void) {
     } else {
         esp_wifi_set_ps(WIFI_PS_NONE);
     }
-}
-
-bool wifiNeedsStaBringup(void) {
-    if (meshIsEnabled()) return false;
-    return WiFi.getMode() != WIFI_MODE_STA;
 }
 
 static uint8_t g_wifiBandMask = WIFI_BAND_24 | WIFI_BAND_5;
@@ -174,9 +168,6 @@ void wifiCoexUnregister(WifiRxParser parser) {
     if (empty) {
         esp_wifi_set_promiscuous_rx_cb(NULL);
         esp_wifi_set_promiscuous(false);
-#ifdef OUISPY_NIMBLE2
-        c5WifiDown();
-#endif
     } else {
         wifiCoexApplyFilter();
     }
