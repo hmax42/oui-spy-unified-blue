@@ -1023,6 +1023,44 @@ static void coexStressTask(void* arg) {
 }
 #endif
 
+#ifdef OUISPY_E2E_TEST
+static int e2eEnq(uint8_t cmd, EngineId id) {
+    EngineCommand ec = {};
+    ec.command = cmd; ec.engine_id = id; ec.payload_len = 0;
+    return xQueueSend(engineCmdQueue, &ec, pdMS_TO_TICKS(10)) == pdTRUE ? 0 : 1;
+}
+static void e2eTestTask(void* arg) {
+    (void)arg;
+    vTaskDelay(pdMS_TO_TICKS(4000));
+    const EngineId ALL[8] = { ENGINE_DETECTOR, ENGINE_FLOCK_BLE, ENGINE_FLOCK_WIFI,
+                              ENGINE_FOXHUNTER, ENGINE_SKYSPY, ENGINE_UNIPWN,
+                              ENGINE_WARDRIVE, ENGINE_PCAP };
+    const EngineId SCAN[5] = { ENGINE_WARDRIVE, ENGINE_FLOCK_WIFI, ENGINE_FLOCK_BLE,
+                               ENGINE_SKYSPY, ENGINE_DETECTOR };
+    for (int cyc = 0; ; cyc++) {
+        uint32_t e0 = millis();
+        int enDrop = 0;
+        for (int i = 0; i < 5; i++) enDrop += e2eEnq(0x01, SCAN[i]);
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        Serial.printf("[E2E] cyc=%d ENABLE burst drop=%d settleMs=%lu mask=0x%02X\n",
+                      cyc, enDrop, (unsigned long)(millis() - e0), engineGetActiveMask());
+        uint32_t d0 = millis();
+        int disDrop = 0;
+        for (int i = 0; i < 8; i++) disDrop += e2eEnq(0x00, ALL[i]);
+        uint8_t offMask = 0xFF; uint32_t poll0 = millis();
+        while (millis() - poll0 < 4000) {
+            offMask = engineGetActiveMask();
+            if (offMask == 0) break;
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+        Serial.printf("[E2E] cyc=%d STOP burst enqDrop=%d stopMs=%lu maskAfter=0x%02X %s\n",
+                      cyc, disDrop, (unsigned long)(millis() - d0), offMask,
+                      offMask == 0 ? "ALL-STOPPED-OK" : "!!! ENGINES REMAIN !!!");
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+#endif
+
 #ifdef OUISPY_SKYSPY_MESH_TEST
 static void skyspyMeshTestEnable(uint8_t eng) {
     EngineCommand ec = {};
@@ -1088,7 +1126,7 @@ void setup() {
 #else
     detectionQueue = xQueueCreate(128, sizeof(DetectionEvent));
 #endif
-    engineCmdQueue = xQueueCreate(8, sizeof(EngineCommand));
+    engineCmdQueue = xQueueCreate(32, sizeof(EngineCommand));
     chimeQueue = xQueueCreate(1, sizeof(uint8_t));
 
     if (detectionQueue == NULL || engineCmdQueue == NULL || chimeQueue == NULL) {
@@ -1134,7 +1172,7 @@ void setup() {
 
     // Create FreeRTOS tasks
     BaseType_t t1 = xTaskCreatePinnedToCore(detectionNotifyTask, "det_notify", 4096, NULL, 2, NULL, 1);
-    BaseType_t t2 = xTaskCreatePinnedToCore(engineCmdTask, "eng_cmd", 4096, NULL, 1, NULL, 1);
+    BaseType_t t2 = xTaskCreatePinnedToCore(engineCmdTask, "eng_cmd", 4096, NULL, 5, NULL, 1);
     BaseType_t t3 = xTaskCreatePinnedToCore(statusHeartbeatTask, "status_hb", 6144, NULL, 1, NULL, 1);
     BaseType_t t4 = xTaskCreatePinnedToCore(chimeTaskFn, "chime", 2048, NULL, 1, NULL, 1);
 
@@ -1211,6 +1249,10 @@ void setup() {
 #ifdef OUISPY_ENGINE_DIAG
     xTaskCreatePinnedToCore(engineDiagTask, "engdiag", 6144, NULL, 1, NULL, 1);
     Serial.println("[INIT] ENGINE DIAG armed (cycles all engines, mesh auto-enabled — standalone repro)");
+#endif
+#ifdef OUISPY_E2E_TEST
+    xTaskCreatePinnedToCore(e2eTestTask, "e2e", 6144, NULL, 1, NULL, 0);
+    Serial.println("[INIT] E2E TEST armed (enable/stop bursts, verifies all-stopped + drops)");
 #endif
 #else
     xTaskCreatePinnedToCore(engineSelftestTask, "selftest", 4096, NULL, 1, NULL, 1);

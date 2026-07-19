@@ -574,13 +574,13 @@ static void wardriveStop(void) {
     if (pWardriveScan != nullptr) {
         bleCoexUnregister(&wardriveBleCallbacks);
         if (pWardriveScan->isScanning()) pWardriveScan->stop();
-        vTaskDelay(pdMS_TO_TICKS(200));
+        vTaskDelay(pdMS_TO_TICKS(100));
         pWardriveScan->clearResults();
         pWardriveScan = nullptr;
     }
 
     wifiCoexUnregister(wardriveWifiCb);
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(40));
     if (meshIsEnabled()) {
         WiFi.disconnect(false, false);
         esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);

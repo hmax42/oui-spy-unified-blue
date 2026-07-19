@@ -37,7 +37,7 @@ static void c5WifiUp(void) {
         Serial.printf("[COEX] C5 WiFi start FAILED dma=%u start=0x%x\n", (unsigned)dma, (int)src);
         return;
     }
-    esp_wifi_set_ps(WIFI_PS_NONE);
+    wifiSnifferApplyPs();
     g_c5WifiUp = true;
     Serial.printf("[COEX] C5 WiFi up dma=%u init=0x%x\n", (unsigned)dma, (int)irc);
 }

@@ -956,7 +956,7 @@ class EngineControlCallbacks : public NimBLECharacteristicCallbacks {
             }
         }
         if (targetOk && engineCmdQueue != NULL) {
-            xQueueSend(engineCmdQueue, &cmd, pdMS_TO_TICKS(10));
+            xQueueSend(engineCmdQueue, &cmd, pdMS_TO_TICKS(100));
         }
 #endif
 
