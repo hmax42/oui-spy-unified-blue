@@ -132,6 +132,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     }).toList();
 
     final feedItems = <Object>[...nonDroneRows, ...droneGroups];
+    final rowIndex = Map<Detection, int>.identity();
+    for (int i = 0; i < nonDroneRows.length; i++) {
+      rowIndex[nonDroneRows[i]] = i;
+    }
     feedItems.sort((a, b) {
       DateTime ts(Object o) => o is Detection
           ? o.appTimestamp
@@ -140,9 +144,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
           ? ts(a).compareTo(ts(b))
           : ts(b).compareTo(ts(a));
       if (a is Detection && b is Detection) {
-        final ia = nonDroneRows.indexOf(a);
-        final ib = nonDroneRows.indexOf(b);
-        return ia.compareTo(ib);
+        return rowIndex[a]!.compareTo(rowIndex[b]!);
       }
       return byTime;
     });

@@ -256,6 +256,9 @@ private struct LockScreenView: View {
                 Text(lockScreenSubtitle(state))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(.white.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .truncationMode(.tail)
             }
 
             Spacer()
