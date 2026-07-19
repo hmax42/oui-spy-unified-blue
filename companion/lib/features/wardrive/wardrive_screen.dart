@@ -59,6 +59,8 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   double _currentZoom = 15;
   double _currentRotation = 0;
   double _povHeading = double.nan;
+  _DetectionLayers? _cachedLayers;
+  String _cachedLayersKey = '';
   List<Geofence> _exclusionZones = [];
   bool _priming = false;
 
@@ -1010,6 +1012,17 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   }
 
   _DetectionLayers _buildDetectionLayers(WardriveController wd, WardriveThemeData wt) {
+    final recentLen = ref.read(appStateProvider).recentDetections.length;
+    final key = '${wd.dedupedDetections.length}|$recentLen|${wd.flockFilter}|'
+        '${wd.detectorFilter}|${_currentZoom.toStringAsFixed(1)}|${wd.sessionId}';
+    if (_cachedLayersKey == key && _cachedLayers != null) return _cachedLayers!;
+    final layers = _computeDetectionLayers(wd, wt);
+    _cachedLayers = layers;
+    _cachedLayersKey = key;
+    return layers;
+  }
+
+  _DetectionLayers _computeDetectionLayers(WardriveController wd, WardriveThemeData wt) {
     final appState = ref.read(appStateProvider);
     final source = <Detection>[...wd.dedupedDetections];
     final seenKeys = <String>{
