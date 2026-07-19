@@ -233,6 +233,9 @@ class WardriveController extends ChangeNotifier {
   bool offlineGpsTag = false;
 
   WardriveState state = WardriveState.idle;
+  // Non-null while the radio is starting up / shutting down, for UI feedback
+  // until the running header (or idle controls) is real. 'starting' | 'stopping'.
+  String? radioTransition;
   bool _userStopped = false;
   final Set<WardriveTarget> selectedTargets = {};
   static const List<WardriveTarget> selectableTargets = [
@@ -678,7 +681,12 @@ class WardriveController extends ChangeNotifier {
     state = WardriveState.running;
     _userStopped = false;
     _ble.wardriveSessionActive = true;
+    radioTransition = 'starting';
+    notifyListeners();
 
+    _detSub?.cancel();
+    _gpsSub?.cancel();
+    _statsTimer?.cancel();
     _detSub = _ble.detections.listen(_onDetection);
     _gpsSub = _gps.positionStream.listen(_onGpsUpdate);
     _statsTimer = Timer.periodic(const Duration(seconds: 1), (_) => notifyListeners());
@@ -690,6 +698,7 @@ class WardriveController extends ChangeNotifier {
 
     await _enableEnginesSequentially(_fleetEngines);
 
+    radioTransition = null;
     WakelockPlus.enable();
 
     // Start iOS Live Activity (Dynamic Island / Lock Screen)
@@ -700,6 +709,7 @@ class WardriveController extends ChangeNotifier {
   }
 
   Future<void> stopSession() async {
+    radioTransition = 'stopping';
     state = WardriveState.idle;
     _userStopped = true;
     _ble.wardriveSessionActive = false;
@@ -733,6 +743,9 @@ class WardriveController extends ChangeNotifier {
       _liveActivity.end();
     }
 
+    radioTransition = null;
+    notifyListeners();
+
     if (sessionId.isNotEmpty && startTime != null) {
       try {
         await _db.updateSession(SessionsCompanion(
@@ -757,26 +770,30 @@ class WardriveController extends ChangeNotifier {
       _rescanNewDetector = 0;
       _rescanNewFlock = 0;
       notifyListeners();
-      try {
-        final res = await WigleCsvRescan.rescanSession(
-          _db,
-          sessionId,
-          watchlist: wl,
-          onProgress: (cur, total, newDet, newFlock) {
-            _rescanCur = cur;
-            _rescanTotal = total;
-            _rescanNewDetector = newDet;
-            _rescanNewFlock = newFlock;
-            notifyListeners();
-          },
-        );
-        DebugLog.log(
-            'WARDRIVE: rescan $sessionId scanned=${res.rowsScanned} updated=${res.rowsUpdated} det=${res.newDetectorMacs} flock=${res.newFlockMacs}');
-      } catch (e) {
-        DebugLog.log('WARDRIVE: rescan failed $e');
-      }
-      _rescanSessionId = null;
-      notifyListeners();
+      // Rescan the saved session against the watchlist in the background so it
+      // never blocks the stop / freezes the UI (grows with session length).
+      unawaited(() async {
+        try {
+          final res = await WigleCsvRescan.rescanSession(
+            _db,
+            sessionId,
+            watchlist: wl,
+            onProgress: (cur, total, newDet, newFlock) {
+              _rescanCur = cur;
+              _rescanTotal = total;
+              _rescanNewDetector = newDet;
+              _rescanNewFlock = newFlock;
+              notifyListeners();
+            },
+          );
+          DebugLog.log(
+              'WARDRIVE: rescan $sessionId scanned=${res.rowsScanned} updated=${res.rowsUpdated} det=${res.newDetectorMacs} flock=${res.newFlockMacs}');
+        } catch (e) {
+          DebugLog.log('WARDRIVE: rescan failed $e');
+        }
+        _rescanSessionId = null;
+        notifyListeners();
+      }());
     }
 
     _lastCompletedSessionId = sessionId;
@@ -1228,9 +1245,13 @@ class WardriveController extends ChangeNotifier {
     DebugLog.log('WARDRIVE: idle — disabled stale node engines to match UI');
   }
 
+  bool _reEnabling = false;
   void _reEnableEngines() {
+    if (_reEnabling) return;
+    _reEnabling = true;
     DebugLog.log('WARDRIVE: re-enabling engines after reconnect');
-    _enableEnginesSequentially(_fleetEngines).then((_) {
+    _enableEnginesSequentially(_fleetEngines).whenComplete(() {
+      _reEnabling = false;
       if (foxhuntTarget != null) {
         _ble.enableEngine(Engine.foxhunter);
         _ble.setFoxhunterTarget(foxhuntTarget!);

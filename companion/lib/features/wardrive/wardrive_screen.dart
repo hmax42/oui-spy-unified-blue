@@ -56,6 +56,8 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   double _statsHeight = 0;
   final _completedBarKey = GlobalKey();
   double _completedBarHeight = 0;
+  final _chipsKey = GlobalKey();
+  double _chipsHeight = 0;
   double _currentZoom = 15;
   double _currentRotation = 0;
   double _povHeading = double.nan;
@@ -830,24 +832,63 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                 ),
               ),
 
+            if (wd.radioTransition != null)
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: Container(
+                  color: th.background.withValues(alpha: 0.96),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppTheme.accent),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        wd.radioTransition == 'stopping'
+                            ? 'RADIO SHUTTING DOWN…'
+                            : 'RADIO STARTING UP…',
+                        style: const TextStyle(
+                          color: AppTheme.accent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             Positioned(
               top: (wd.isActive
                       ? _statsHeight
                       : (wd.hasSessionData ? _completedBarHeight : 0)) +
                   8,
               left: 0, right: 0,
-              child: Center(
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    for (final m in WardriveController.selectableTargets)
-                      if (m != WardriveTarget.wigle &&
-                          ((wd.isActive && wd.isTargetSelected(m)) ||
-                              _targetEngineRunning(appEngines, m)))
-                        _ScanningPill(color: m.color, label: m.label),
-                  ],
+              child: _MeasuredBox(
+                statsKey: _chipsKey,
+                onHeightChanged: (h) {
+                  if ((_chipsHeight - h).abs() > 1) {
+                    setState(() => _chipsHeight = h);
+                  }
+                },
+                child: Center(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      for (final m in WardriveController.selectableTargets)
+                        if (m != WardriveTarget.wigle &&
+                            ((wd.isActive && wd.isTargetSelected(m)) ||
+                                _targetEngineRunning(appEngines, m)))
+                          _ScanningPill(color: m.color, label: m.label),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -901,10 +942,11 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                 ),
               ),
 
-            // Active: focus button (top-right, below stats)
+            // Active: focus button (top-right, below stats + chip rows)
             if (wd.isActive)
               Positioned(
-                top: _statsHeight + 8, right: 12,
+                top: _statsHeight + 8 + _chipsHeight + 8,
+                right: 12,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
