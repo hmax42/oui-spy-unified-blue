@@ -956,7 +956,11 @@ class EngineControlCallbacks : public NimBLECharacteristicCallbacks {
             }
         }
         if (targetOk && engineCmdQueue != NULL) {
+#ifdef OUISPY_NIMBLE2
             xQueueSend(engineCmdQueue, &cmd, pdMS_TO_TICKS(100));
+#else
+            xQueueSend(engineCmdQueue, &cmd, pdMS_TO_TICKS(10));
+#endif
         }
 #endif
 

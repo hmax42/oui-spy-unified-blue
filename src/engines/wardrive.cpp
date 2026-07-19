@@ -574,13 +574,21 @@ static void wardriveStop(void) {
     if (pWardriveScan != nullptr) {
         bleCoexUnregister(&wardriveBleCallbacks);
         if (pWardriveScan->isScanning()) pWardriveScan->stop();
+#ifdef OUISPY_NIMBLE2
         vTaskDelay(pdMS_TO_TICKS(100));
+#else
+        vTaskDelay(pdMS_TO_TICKS(200));
+#endif
         pWardriveScan->clearResults();
         pWardriveScan = nullptr;
     }
 
     wifiCoexUnregister(wardriveWifiCb);
+#ifdef OUISPY_NIMBLE2
     vTaskDelay(pdMS_TO_TICKS(40));
+#else
+    vTaskDelay(pdMS_TO_TICKS(100));
+#endif
     if (meshIsEnabled()) {
         WiFi.disconnect(false, false);
         esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);

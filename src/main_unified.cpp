@@ -616,9 +616,11 @@ static void statusHeartbeatTask(void* param) {
     }
 }
 
-#ifdef OUISPY_ENGINE_DIAG
+#if defined(OUISPY_ENGINE_DIAG) || defined(OUISPY_ENGINE_MATRIX)
 volatile uint32_t g_diagDetCount[ENGINE_COUNT] = {0};
+#endif
 
+#ifdef OUISPY_ENGINE_DIAG
 static const char* diagEngName(int id) {
     switch (id) {
         case ENGINE_DETECTOR:   return "DETECTOR";
@@ -1061,6 +1063,108 @@ static void e2eTestTask(void* arg) {
 }
 #endif
 
+#ifdef OUISPY_ENGINE_MATRIX
+static uint8_t chBand(uint8_t ch) { return ch == 0 ? 0 : (ch <= 14 ? 1 : 2); }
+static uint32_t mDet(EngineId e) { return g_diagDetCount[e]; }
+static void mZeroDet(void) { for (int i = 0; i < ENGINE_COUNT; i++) g_diagDetCount[i] = 0; }
+static void engineMatrixTask(void* arg) {
+    (void)arg;
+    vTaskDelay(pdMS_TO_TICKS(4000));
+    Serial.println("[MATRIX] ===== C5 ENGINE x BAND x RADIO x STRESS (instrumented) =====");
+
+    // A) WARDRIVE across BANDS (radio=both). measure raw frames + real detections + channel dwell.
+    const uint8_t bands[3] = {0x01, 0x02, 0x03};
+    const char* bn[3] = {"2.4only", "5G-only", "both"};
+    wardriveSetRadioMask(0x03);
+    for (int b = 0; b < 3; b++) {
+        wifiSetBandMask(bands[b]);
+        uint32_t r0 = g_engRawSeen; mZeroDet();
+        engineEnable(ENGINE_WARDRIVE);
+        uint32_t ch24 = 0, ch5 = 0;
+        for (int i = 0; i < 12; i++) {
+            uint8_t ch = 0; wifi_second_chan_t s2; esp_wifi_get_channel(&ch, &s2);
+            if (chBand(ch) == 1) ch24++; else if (chBand(ch) == 2) ch5++;
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        uint32_t raw = g_engRawSeen - r0;
+        Serial.printf("[MATRIX] BAND %-7s raw=%lu (%lu/s) det=%lu dwell[2.4=%lu 5G=%lu] %s\n",
+                      bn[b], (unsigned long)raw, (unsigned long)(raw / 12),
+                      (unsigned long)mDet(ENGINE_WARDRIVE), (unsigned long)ch24, (unsigned long)ch5,
+                      raw > 0 ? "CAPTURED" : "!!! ZERO !!!");
+        engineDisableAll();
+        vTaskDelay(pdMS_TO_TICKS(1500));
+    }
+
+    // B) WARDRIVE across RADIO modes (band=both). WiFi-only / BLE-only / both.
+    wifiSetBandMask(0x03);
+    const uint8_t radios[3] = {0x01, 0x02, 0x03};
+    const char* rn[3] = {"WiFi", "BLE", "WiFi+BLE"};
+    for (int r = 0; r < 3; r++) {
+        wardriveSetRadioMask(radios[r]);
+        uint32_t r0 = g_engRawSeen; mZeroDet();
+        engineEnable(ENGINE_WARDRIVE);
+        for (int i = 0; i < 10; i++) vTaskDelay(pdMS_TO_TICKS(1000));
+        uint32_t raw = g_engRawSeen - r0;
+        Serial.printf("[MATRIX] RADIO %-8s raw=%lu det=%lu %s\n",
+                      rn[r], (unsigned long)raw, (unsigned long)mDet(ENGINE_WARDRIVE),
+                      mDet(ENGINE_WARDRIVE) > 0 ? "DETECTED" : "(no targets in range?)");
+        engineDisableAll();
+        vTaskDelay(pdMS_TO_TICKS(1200));
+    }
+    wardriveSetRadioMask(0x03);
+
+    // C) EACH engine ALONE: raw + real detections + clean stop.
+    const EngineId alone[] = {ENGINE_DETECTOR, ENGINE_FLOCK_BLE, ENGINE_FLOCK_WIFI,
+                             ENGINE_FOXHUNTER, ENGINE_SKYSPY, ENGINE_UNIPWN,
+                             ENGINE_WARDRIVE, ENGINE_PCAP};
+    for (unsigned k = 0; k < sizeof(alone) / sizeof(alone[0]); k++) {
+        uint32_t r0 = g_engRawSeen; mZeroDet();
+        engineEnable(alone[k]);
+        for (int i = 0; i < 8; i++) vTaskDelay(pdMS_TO_TICKS(1000));
+        uint32_t raw = g_engRawSeen - r0;
+        uint32_t det = mDet(alone[k]);
+        engineDisableAll();
+        vTaskDelay(pdMS_TO_TICKS(1200));
+        uint8_t m = engineGetActiveMask();
+        Serial.printf("[MATRIX] ALONE eng=%d raw=%lu det=%lu stopMask=0x%02X %s\n",
+                      alone[k], (unsigned long)raw, (unsigned long)det, m,
+                      m == 0 ? "STOP-OK" : "!!! NOT-STOPPED !!!");
+    }
+
+    // D) ALL together: per-engine detections + no-crash.
+    {
+        uint32_t r0 = g_engRawSeen; mZeroDet();
+        for (int e = 0; e < ENGINE_COUNT; e++) engineEnable((EngineId)e);
+        uint8_t on = engineGetActiveMask();
+        for (int i = 0; i < 15; i++) vTaskDelay(pdMS_TO_TICKS(1000));
+        uint32_t raw = g_engRawSeen - r0;
+        Serial.printf("[MATRIX] ALL mask=0x%02X raw=%lu det[DET=%lu FB=%lu FW=%lu FOX=%lu SKY=%lu WD=%lu] heap=%lu %s\n",
+                      on, (unsigned long)raw,
+                      (unsigned long)mDet(ENGINE_DETECTOR), (unsigned long)mDet(ENGINE_FLOCK_BLE),
+                      (unsigned long)mDet(ENGINE_FLOCK_WIFI), (unsigned long)mDet(ENGINE_FOXHUNTER),
+                      (unsigned long)mDet(ENGINE_SKYSPY), (unsigned long)mDet(ENGINE_WARDRIVE),
+                      (unsigned long)esp_get_free_heap_size(), (raw > 0 && on != 0) ? "OK" : "!!! FAIL !!!");
+        engineDisableAll();
+        vTaskDelay(pdMS_TO_TICKS(1500));
+    }
+
+    // E) STRESS: rapid stop/start.
+    int fails = 0;
+    for (int i = 0; i < 20; i++) {
+        engineEnable(ENGINE_WARDRIVE); engineEnable(ENGINE_SKYSPY);
+        vTaskDelay(pdMS_TO_TICKS(300));
+        engineDisableAll();
+        vTaskDelay(pdMS_TO_TICKS(300));
+        if (engineGetActiveMask() != 0) fails++;
+    }
+    Serial.printf("[MATRIX] STRESS 20x stop/start fails=%d heap=%lu %s\n",
+                  fails, (unsigned long)esp_get_free_heap_size(),
+                  fails == 0 ? "OK" : "!!! STRESS-FAIL !!!");
+    Serial.println("[MATRIX] ===== DONE =====");
+    vTaskDelete(NULL);
+}
+#endif
+
 #ifdef OUISPY_SKYSPY_MESH_TEST
 static void skyspyMeshTestEnable(uint8_t eng) {
     EngineCommand ec = {};
@@ -1126,7 +1230,11 @@ void setup() {
 #else
     detectionQueue = xQueueCreate(128, sizeof(DetectionEvent));
 #endif
+#ifdef OUISPY_NIMBLE2
     engineCmdQueue = xQueueCreate(32, sizeof(EngineCommand));
+#else
+    engineCmdQueue = xQueueCreate(8, sizeof(EngineCommand));
+#endif
     chimeQueue = xQueueCreate(1, sizeof(uint8_t));
 
     if (detectionQueue == NULL || engineCmdQueue == NULL || chimeQueue == NULL) {
@@ -1172,7 +1280,11 @@ void setup() {
 
     // Create FreeRTOS tasks
     BaseType_t t1 = xTaskCreatePinnedToCore(detectionNotifyTask, "det_notify", 4096, NULL, 2, NULL, 1);
+#ifdef OUISPY_NIMBLE2
     BaseType_t t2 = xTaskCreatePinnedToCore(engineCmdTask, "eng_cmd", 4096, NULL, 5, NULL, 1);
+#else
+    BaseType_t t2 = xTaskCreatePinnedToCore(engineCmdTask, "eng_cmd", 4096, NULL, 1, NULL, 1);
+#endif
     BaseType_t t3 = xTaskCreatePinnedToCore(statusHeartbeatTask, "status_hb", 6144, NULL, 1, NULL, 1);
     BaseType_t t4 = xTaskCreatePinnedToCore(chimeTaskFn, "chime", 2048, NULL, 1, NULL, 1);
 
@@ -1253,6 +1365,10 @@ void setup() {
 #ifdef OUISPY_E2E_TEST
     xTaskCreatePinnedToCore(e2eTestTask, "e2e", 6144, NULL, 1, NULL, 0);
     Serial.println("[INIT] E2E TEST armed (enable/stop bursts, verifies all-stopped + drops)");
+#endif
+#ifdef OUISPY_ENGINE_MATRIX
+    xTaskCreatePinnedToCore(engineMatrixTask, "matrix", 6144, NULL, 1, NULL, 0);
+    Serial.println("[INIT] ENGINE MATRIX armed (band x engine x stress on hardware)");
 #endif
 #else
     xTaskCreatePinnedToCore(engineSelftestTask, "selftest", 4096, NULL, 1, NULL, 1);
