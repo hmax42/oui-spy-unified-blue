@@ -379,6 +379,99 @@
       animation: fadeIn 0.5s forwards;
     }
 
+    .complete-msg .restart-note {
+      display: block;
+      margin-top: 0.6rem;
+      color: var(--warning);
+      font-size: 0.68rem;
+      letter-spacing: 1px;
+      line-height: 1.6;
+    }
+
+    /* Role tabs */
+    .role-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .role-tab {
+      flex: 1;
+      padding: 0.7rem 0.5rem;
+      background: var(--surface-light);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      font-family: inherit;
+      color: var(--text-dim);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .role-tab .role-tab-sub {
+      display: block;
+      font-size: 0.55rem;
+      letter-spacing: 0.5px;
+      text-transform: none;
+      font-weight: 400;
+      margin-top: 3px;
+      opacity: 0.75;
+    }
+    .role-tab.active { background: var(--surface); }
+    .role-tab[data-role="node"].active { border-color: var(--success); color: var(--success); }
+    .role-tab[data-role="mgr"].active { border-color: var(--accent); color: var(--accent); }
+
+    .role-desc {
+      font-size: 0.62rem;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      letter-spacing: 0.3px;
+      margin-bottom: 1.25rem;
+      min-height: 3.2em;
+    }
+    .role-desc strong { color: var(--text-primary); }
+
+    /* Board cards */
+    .board-grid { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem; }
+    .board-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.7rem 0.9rem;
+      background: var(--surface-light);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .board-card:hover { border-color: var(--text-dim); }
+    .board-card.selected { border-color: var(--accent); background: var(--surface); }
+    .board-card .bc-name {
+      font-size: 0.78rem;
+      color: var(--text-primary);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+    }
+    .board-card .bc-meta {
+      font-size: 0.58rem;
+      color: var(--text-dim);
+      letter-spacing: 0.5px;
+      margin-top: 3px;
+    }
+    .board-card .bc-badge {
+      font-size: 0.5rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--success);
+      border: 1px solid var(--success);
+      border-radius: 3px;
+      padding: 2px 5px;
+      margin-left: 0.5rem;
+      white-space: nowrap;
+    }
+    .board-card .bc-check { color: var(--accent); font-size: 0.9rem; opacity: 0; transition: opacity 0.15s; }
+    .board-card.selected .bc-check { opacity: 1; }
+
     /* Scrollbar */
     .log::-webkit-scrollbar { width: 3px; }
     .log::-webkit-scrollbar-track { background: transparent; }
@@ -433,31 +526,20 @@
       </div>
 
       <div id="mainContent">
-        <div style="font-size:0.65rem;line-height:1.7;color:var(--text-secondary);margin-bottom:12px;letter-spacing:0.3px;">
-          <strong style="color:var(--success);">NODE</strong> = scanner. Detects WiFi/BLE/drones/trackers on its own. <strong>Use this for a single device.</strong><br>
-          <strong style="color:var(--accent);">MANAGER</strong> = hub for a multi-node mesh. It coordinates &amp; aggregates nodes and <strong>does not scan by itself</strong> — only flash this if you are running 2+ boards.
+        <div class="role-tabs">
+          <div class="role-tab active" data-role="node" onclick="setRole('node')">
+            Node<span class="role-tab-sub">single scanner</span>
+          </div>
+          <div class="role-tab" data-role="mgr" onclick="setRole('mgr')">
+            Manager<span class="role-tab-sub">multi-node hub</span>
+          </div>
         </div>
-        <select id="targetSelect" onchange="setTarget(this.value)"
-                style="width:100%;padding:10px;margin-bottom:12px;background:var(--surface-light);color:var(--text-primary);border:1px solid var(--border);font-family:inherit;font-size:13px;">
-          <option value="node-xiao_s3">XIAO ESP32-S3 — NODE (scanner) — recommended</option>
-          <option value="node-s3_devkitc">ESP32-S3 N16R8 DevKitC — NODE (scanner)</option>
-          <option value="node-xiao_c5">XIAO ESP32-C5 — NODE (scanner, 2.4+5GHz dual-band)</option>
-          <option value="mgr-xiao_s3">XIAO ESP32-S3 — MANAGER (multi-node hub, no scan)</option>
-          <option value="mgr-s3_devkitc">ESP32-S3 N16R8 DevKitC — MANAGER (multi-node hub, no scan)</option>
-          <option value="mgr-xiao_c3">XIAO ESP32-C3 — MANAGER (multi-node hub, no scan)</option>
-          <option value="mgr-wroom">ESP32 WROOM — MANAGER (multi-node hub, no scan)</option>
-        </select>
+        <div class="role-desc" id="roleDesc"></div>
+        <div class="board-grid" id="boardGrid"></div>
         <button class="flash-btn" id="flashBtn" onclick="startFlash()">
           CONNECT &amp; FLASH
         </button>
       </div>
-      <script>
-        (function(){
-          const t = localStorage.getItem('ouispy_target') || 'node-xiao_s3';
-          const s = document.getElementById('targetSelect');
-          if (s) s.value = t;
-        })();
-      </script>
 
       <div class="progress-container" id="progressContainer">
         <div class="progress-bar">
@@ -467,7 +549,8 @@
       </div>
 
       <div class="complete-msg" id="completeMsg">
-        FIRMWARE DEPLOYED // COMPLETED: SUCCESS
+        FIRMWARE DEPLOYED // SUCCESS
+        <span class="restart-note">↻ Unplug and replug the board for the update to take effect.</span>
       </div>
 
       <div class="log" id="log"></div>
@@ -507,37 +590,44 @@
 
     const TARGETS = {
       'node-xiao_s3': {
+        role: 'node', name: 'XIAO ESP32-S3', chip: 'ESP32-S3', bands: '2.4GHz', flash: '8MB', recommended: true,
         label: 'XIAO ESP32-S3 (node)',
         path: 'node-xiao_s3/',
         flashSize: '8MB', flashMode: 'qio', flashFreq: '80m',
       },
-      'node-s3_devkitc': {
-        label: 'ESP32-S3 N16R8 DevKitC (node)',
-        path: 'node-s3_devkitc/',
-        flashSize: '16MB', flashMode: 'qio', flashFreq: '80m',
-      },
       'node-xiao_c5': {
+        role: 'node', name: 'XIAO ESP32-C5', chip: 'ESP32-C5', bands: '2.4 + 5GHz', flash: '8MB',
         label: 'XIAO ESP32-C5 (node, dual-band 2.4+5GHz)',
         path: 'node-xiao_c5/',
         flashSize: '8MB', flashMode: 'dio', flashFreq: '80m',
         bootloaderOffset: 0x2000,
       },
+      'node-s3_devkitc': {
+        role: 'node', name: 'ESP32-S3 DevKitC', chip: 'ESP32-S3 N16R8', bands: '2.4GHz', flash: '16MB',
+        label: 'ESP32-S3 N16R8 DevKitC (node)',
+        path: 'node-s3_devkitc/',
+        flashSize: '16MB', flashMode: 'qio', flashFreq: '80m',
+      },
       'mgr-xiao_s3': {
+        role: 'mgr', name: 'XIAO ESP32-S3', chip: 'ESP32-S3', flash: '8MB', recommended: true,
         label: 'XIAO ESP32-S3 — MANAGER (multi-node hub)',
         path: 'mgr-xiao_s3/',
         flashSize: '8MB', flashMode: 'qio', flashFreq: '80m',
       },
       'mgr-s3_devkitc': {
+        role: 'mgr', name: 'ESP32-S3 DevKitC', chip: 'ESP32-S3 N16R8', flash: '16MB',
         label: 'ESP32-S3 N16R8 DevKitC (manager)',
         path: 'mgr-s3_devkitc/',
         flashSize: '16MB', flashMode: 'qio', flashFreq: '80m',
       },
       'mgr-xiao_c3': {
+        role: 'mgr', name: 'XIAO ESP32-C3', chip: 'ESP32-C3', flash: '4MB',
         label: 'XIAO ESP32-C3 (manager)',
         path: 'mgr-xiao_c3/',
         flashSize: '4MB', flashMode: 'dio', flashFreq: '80m',
       },
       'mgr-wroom': {
+        role: 'mgr', name: 'ESP32 WROOM', chip: 'ESP32', flash: '4MB',
         label: 'ESP32 WROOM (manager)',
         path: 'mgr-wroom/',
         flashSize: '4MB', flashMode: 'dio', flashFreq: '40m',
@@ -632,13 +722,51 @@
       throw new Error(`Failed to fetch ${name}: ${resp.status}`);
     }
 
+    const ROLE_DESC = {
+      node: '<strong>Node</strong> — a standalone scanner. Detects WiFi, BLE, drones, and trackers on its own. Flash this for a single device.',
+      mgr:  '<strong>Manager</strong> — coordinates a multi-node mesh and aggregates the nodes’ data. It does <strong>not scan by itself</strong> — only flash this if you run 2 or more boards.'
+    };
+
+    function renderBoards(role) {
+      const grid = document.getElementById('boardGrid');
+      if (!grid) return;
+      grid.innerHTML = '';
+      Object.keys(TARGETS).filter(k => TARGETS[k].role === role).forEach(k => {
+        const t = TARGETS[k];
+        const meta = t.chip + (t.bands ? ' · ' + t.bands : '') + ' · ' + t.flash + ' flash';
+        const card = document.createElement('div');
+        card.className = 'board-card' + (k === currentTarget ? ' selected' : '');
+        card.onclick = () => setTarget(k);
+        card.innerHTML =
+          '<div><div class="bc-name">' + t.name +
+          (t.recommended ? '<span class="bc-badge">recommended</span>' : '') +
+          '</div><div class="bc-meta">' + meta + '</div></div>' +
+          '<div class="bc-check">✓</div>';
+        grid.appendChild(card);
+      });
+    }
+
+    window.setRole = function(role) {
+      document.querySelectorAll('.role-tab').forEach(el =>
+        el.classList.toggle('active', el.dataset.role === role));
+      const desc = document.getElementById('roleDesc');
+      if (desc) desc.innerHTML = ROLE_DESC[role];
+      const keys = Object.keys(TARGETS).filter(k => TARGETS[k].role === role);
+      if (!keys.includes(currentTarget)) {
+        currentTarget = keys[0];
+        localStorage.setItem('ouispy_target', currentTarget);
+      }
+      renderBoards(role);
+    };
+
     window.setTarget = function(key) {
       if (!TARGETS[key]) return;
       currentTarget = key;
       localStorage.setItem('ouispy_target', key);
-      const sel = document.getElementById('targetSelect');
-      if (sel) sel.value = key;
+      renderBoards(TARGETS[key].role);
     };
+
+    setRole(TARGETS[currentTarget] ? TARGETS[currentTarget].role : 'node');
 
     window.startFlash = async function() {
       if (!('serial' in navigator)) return;
@@ -666,7 +794,7 @@
           }
         });
 
-        log('Connecting to ESP32-S3...');
+        log('Connecting to ' + TARGETS[currentTarget].chip + '...');
         const chip = await esploader.main();
         log(`Chip: ${chip}`, 'success');
         setStatus('FLASHING', 'flashing');
@@ -709,7 +837,7 @@
         setProgress(100, 'COMPLETE');
         progressFill.classList.add('complete');
         setStatus('FLASH COMPLETE', 'done');
-        log('Flash complete. Device should reset...', 'success');
+        log('Flash complete — unplug and replug the board for the update to take effect.', 'success');
 
         await esploader.after("hard_reset");
         await transport.disconnect();
