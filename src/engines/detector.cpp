@@ -623,6 +623,9 @@ void detectorHostSuspend(bool suspend) {
             if (!meshIsEnabled()) WiFi.mode(WIFI_STA);
             wifiSnifferApplyPs();
             wifiCoexRegister(wifiSnifferCb, WIFI_PROMIS_FILTER_MASK_MGMT);
+#ifdef OUISPY_NIMBLE2
+            wifiActive = true;
+#endif
         }
     }
 }
