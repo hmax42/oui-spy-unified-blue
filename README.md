@@ -70,7 +70,7 @@ The [web flasher](https://lukeswitz.github.io/oui-spy-unified-blue/) always list
 |---|---|---|---|---|
 | **XIAO ESP32-S3** | NODE | 2.4 GHz | `node-xiao_s3` | `v3_app_controlled` |
 | ESP32-S3 N16R8 DevKitC | NODE | 2.4 GHz | `node-s3_devkitc` | `v3_app_controlled_s3_devkitc` |
-| **XIAO ESP32-C5** (experimental) | NODE | **2.4 + 5 GHz** | `node-xiao_c5` | `v3_app_controlled_c5` |
+| **XIAO ESP32-C5** (experimental) | NODE — standalone only, no mesh | **2.4 + 5 GHz** | `node-xiao_c5` | `v3_app_controlled_c5` |
 | **XIAO ESP32-S3** | MANAGER | — | `mgr-xiao_s3` | `v3_node_manager_s3` |
 | ESP32-S3 N16R8 DevKitC | MANAGER | — | `mgr-s3_devkitc` | `v3_node_manager_s3_devkitc` |
 | XIAO ESP32-C3 | MANAGER | — | `mgr-xiao_c3` | `v3_node_manager_xiao_c3` |
@@ -78,7 +78,7 @@ The [web flasher](https://lukeswitz.github.io/oui-spy-unified-blue/) always list
 
 - **One board:** flash NODE (`node-xiao_s3`).
 - **Several boards:** flash MANAGER on the one your phone connects to (`mgr-xiao_s3`), NODE on the rest.
-- The **ESP32-C5** is the only board that also scans 5 GHz. It's newer and less tested — treat it as experimental.
+- The **ESP32-C5** is the only board that also scans 5 GHz. It's newer and less tested — treat it as experimental. It runs **standalone only** (phone connects to it directly); it does **not** join a manager's mesh fleet, so it can't be a fleet node under a manager.
 
 </details>
 
@@ -128,7 +128,7 @@ One Flutter app for iOS, macOS, and Android.
 - **UniPwn** — Unitree robots by BLE name prefix (`Go2_`, `G1_`, `H1_`, …): detect → connect → exploit.
 - **Wardrive** — logs every AP + BLE device (SSID, BSSID, channel, auth mode), GPS-stamped, WiGLE-compatible. Sweeps your configured 2.4 GHz range (default 1–14); on the C5 it also sweeps the full 5 GHz set (UNII-1/2/2e/3, 36–165 incl DFS).
 
-**Mesh link.** Nodes talk to the manager over encrypted **ESP-NOW** (AES-GCM), broadcast on one shared channel (2.4 GHz **channel 1**). It's a single-hop star — every node reaches the manager directly, with no node-to-node relay (max 6 nodes, up to ~200 m per link in open line of sight). Scanning nodes weave back to channel 1 each sweep to pass traffic, so mesh chatter and channel-split scanning share the radio. A node silent for 45 s drops off and rejoins on its own when back in range. Manager settings (buzzer, LED, alert timing, ignore list, wardrive radio, Wi-Fi band) push to every node and override their local copies.
+**Mesh link.** Nodes talk to the manager over encrypted **ESP-NOW** (AES-GCM), broadcast on one shared channel (2.4 GHz **channel 1**). It's a single-hop star — every node reaches the manager directly, with no node-to-node relay (max 6 nodes, up to ~200 m per link in open line of sight). Scanning nodes weave back to channel 1 each sweep to pass traffic, so mesh chatter and channel-split scanning share the radio. A node silent for 45 s drops off and rejoins on its own when back in range. Manager settings (buzzer, LED, alert timing, ignore list, wardrive radio, Wi-Fi band) push to every node and override their local copies. The **ESP32-C5 does not participate in the mesh** — it runs standalone (connected directly to your phone) and cannot be a fleet node under a manager.
 
 </details>
 

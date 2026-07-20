@@ -606,8 +606,8 @@
       },
       'node-xiao_c5': {
         role: 'node', name: 'XIAO ESP32-C5', chip: 'ESP32-C5', bands: '2.4 + 5GHz', flash: '8MB',
-        experimental: true,
-        note: 'Experimental — dual-band 2.4+5GHz on newer silicon; less field-tested than the S3.',
+        experimental: true, standalone: true,
+        note: 'Experimental — dual-band 2.4+5GHz on newer silicon; less field-tested than the S3. Standalone only: it cannot join a manager mesh, so it can only run connected directly to your phone (not as a fleet node).',
         label: 'XIAO ESP32-C5 (node, dual-band 2.4+5GHz)',
         path: 'node-xiao_c5/',
         flashSize: '8MB', flashMode: 'dio', flashFreq: '80m',
@@ -752,6 +752,7 @@
           '<div><div class="bc-name">' + t.name +
           (t.recommended ? '<span class="bc-badge">recommended</span>' : '') +
           (t.experimental ? '<span class="bc-badge exp">experimental</span>' : '') +
+          (t.standalone ? '<span class="bc-badge exp">no mesh</span>' : '') +
           '</div><div class="bc-meta">' + meta + '</div>' +
           (t.note ? '<div class="bc-note">' + t.note + '</div>' : '') +
           '</div>' +
