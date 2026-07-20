@@ -33,13 +33,8 @@ static unsigned long lastChannelHop = 0;
 
 #ifdef OUISPY_DUAL_BAND
 static const uint8_t kDualBandChannels[] = {
-    1, 6, 11,
-    36, 40, 44, 48,
-    52, 56, 60, 64,
-    100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144,
-    149, 153, 157, 161, 165
+    1, 6, 11, 36, 40, 44, 48, 149, 153, 157, 161, 165
 };
-static const uint16_t k5GHzMinDwellMs = 150;
 #endif
 
 static uint16_t priorityDwellMs = 300;
@@ -62,22 +57,7 @@ static bool isPriorityChannel(uint8_t ch) {
 }
 
 static uint16_t scanDwellForChannel(uint8_t ch) {
-    uint16_t d = isPriorityChannel(ch) ? priorityDwellMs : normalDwellMs;
-#ifdef OUISPY_DUAL_BAND
-    if (ch > 14 && d < k5GHzMinDwellMs) d = k5GHzMinDwellMs;
-#endif
-    return d;
-}
-
-#ifdef OUISPY_DUAL_BAND
-static bool isDfsChannel(uint8_t ch) {
-    return (ch >= 52 && ch <= 64) || (ch >= 100 && ch <= 144);
-}
-#else
-static inline bool isDfsChannel(uint8_t ch) { (void)ch; return false; }
-#endif
-static inline void wardriveTuneChannel(uint8_t ch) {
-    esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+    return isPriorityChannel(ch) ? priorityDwellMs : normalDwellMs;
 }
 
 static void buildHopSchedule(void) {
@@ -96,7 +76,6 @@ static void buildHopSchedule(void) {
         hopScheduleLen++;
     }
 #endif
-#ifndef OUISPY_DUAL_BAND
     const uint8_t kPri[3] = {1, 6, 11};
     for (uint8_t i = 0; i < 3 && hopScheduleLen < 32; i++) {
         if (kPri[i] >= channelStart && kPri[i] <= channelEnd && wifiChanEnabled(kPri[i])) {
@@ -105,7 +84,6 @@ static void buildHopSchedule(void) {
             hopScheduleLen++;
         }
     }
-#endif
     // Node mode: ensure the sweep visits the mesh channel (ch1) so ESP-NOW
     // rides the natural dwell instead of a forced scan-pausing park. ch1 is a
     // real, dense channel, so this dwell still logs networks. Skipped in solo
@@ -264,10 +242,8 @@ static const uint8_t wildcardProbeTemplate[] = {
     0x00, 0x00,
     // SSID parameter set: tag 0, length 0 (wildcard)
     0x00, 0x00,
-    // Supported rates: 1, 2, 5.5, 11 CCK (basic) + 6, 9, 12, 18 OFDM
-    0x01, 0x08, 0x82, 0x84, 0x8B, 0x96, 0x0C, 0x12, 0x18, 0x24,
-    // Extended supported rates: 24, 36, 48, 54 OFDM — 5GHz APs ignore CCK-only probes
-    0x32, 0x04, 0x30, 0x48, 0x60, 0x6C,
+    // Supported rates: 1, 2, 5.5, 11 Mbps
+    0x01, 0x04, 0x82, 0x84, 0x8B, 0x96,
 };
 
 static void sendWildcardProbe(void) {
@@ -565,9 +541,9 @@ static void wardriveStart(void) {
         wifiSnifferApplyPs();
         wifiCoexRegister(wardriveWifiCb,
                          WIFI_PROMIS_FILTER_MASK_MGMT | WIFI_PROMIS_FILTER_MASK_DATA);
-        wardriveTuneChannel(currentChannel);
+        esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
 
-        if (!isDfsChannel(currentChannel)) sendWildcardProbe();
+        sendWildcardProbe();
     }
 
     // BLE scanner
@@ -614,7 +590,7 @@ static void wardriveStop(void) {
 #endif
     if (meshIsEnabled()) {
         WiFi.disconnect(false, false);
-        wardriveTuneChannel(1);
+        esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
     } else {
         WiFi.disconnect(true, true);
     }
@@ -685,10 +661,10 @@ static void wardriveLoop(void) {
             }
 #endif
             currentChannel = hopSchedule[hopIdx];
-            wardriveTuneChannel(currentChannel);
+            esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
             lastChannelHop = now;
             wifiLastNetMs = now;
-            if (!isDfsChannel(currentChannel)) sendWildcardProbe();
+            sendWildcardProbe();
             if (meshIsEnabled() && currentChannel == MESH_RENDEZVOUS_CH) meshNoteOnHome();
         }
     }
