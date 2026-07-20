@@ -10,7 +10,7 @@
 
 <img width="320" alt="OUI-SPY APEX" src="https://github.com/user-attachments/assets/5a201c27-558b-4409-9e49-82d6e0176a4c" />
 
-**Spot the wireless devices watching you.** A pocket gadget that finds hidden trackers, Flock cameras, drones, and other snooping hardware nearby — and shows them live on your phone. Runs on a cheap ESP32 board, controlled from a free app. No SD card, no laptop.
+**Spot the wireless devices watching you.** A pocket gadget that finds hidden trackers, Flock cameras, drones, and other snooping hardware nearby — and shows them live on your phone. Runs on a cheap ESP32 board — including the dual-band **ESP32-C5** that scans both **2.4 and 5 GHz** Wi-Fi — controlled from a free app. No SD card, no laptop.
 
 </div>
 
