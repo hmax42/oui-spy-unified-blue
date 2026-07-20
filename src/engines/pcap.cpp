@@ -29,8 +29,13 @@ static uint8_t pcapHopIdx    = 0;
 static uint8_t pcapCurChan   = 1;
 #ifdef OUISPY_DUAL_BAND
 static const uint8_t kPcap5g[] = {36, 40, 44, 48, 149, 153, 157, 161, 165};
+static const uint8_t kPcap5gDfs[] = {52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144};
+static uint8_t pcap5gMode = 1;
+#define PCAP_MAX_HOPS 48
+#else
+#define PCAP_MAX_HOPS 32
 #endif
-static uint8_t pcapHopList[32];
+static uint8_t pcapHopList[PCAP_MAX_HOPS];
 static uint8_t pcapHopListLen = 0;
 static bool    pcapRendezvousInSet = false;
 static unsigned long pcapLastHop = 0;
@@ -374,14 +379,21 @@ static void pcapInit(void) {
 static void pcapBuildHopList(void) {
     pcapHopListLen = 0;
     pcapRendezvousInSet = false;
-    for (uint8_t c = pcapChanStart; c <= pcapChanEnd && pcapHopListLen < 32; c++) {
+    for (uint8_t c = pcapChanStart; c <= pcapChanEnd && pcapHopListLen < PCAP_MAX_HOPS; c++) {
         if (!wifiChanEnabled(c)) continue;
         if (c == 1) pcapRendezvousInSet = true;
         pcapHopList[pcapHopListLen++] = c;
     }
 #ifdef OUISPY_DUAL_BAND
-    for (uint8_t i = 0; i < sizeof(kPcap5g) && pcapHopListLen < 32; i++) {
-        if (wifiChanEnabled(kPcap5g[i])) pcapHopList[pcapHopListLen++] = kPcap5g[i];
+    if (!engineAutoPcapPending() && pcap5gMode >= 1) {
+        for (uint8_t i = 0; i < sizeof(kPcap5g) && pcapHopListLen < PCAP_MAX_HOPS; i++) {
+            if (wifiChanEnabled(kPcap5g[i])) pcapHopList[pcapHopListLen++] = kPcap5g[i];
+        }
+        if (pcap5gMode >= 2) {
+            for (uint8_t i = 0; i < sizeof(kPcap5gDfs) && pcapHopListLen < PCAP_MAX_HOPS; i++) {
+                if (wifiChanEnabled(kPcap5gDfs[i])) pcapHopList[pcapHopListLen++] = kPcap5gDfs[i];
+            }
+        }
     }
 #endif
     if (pcapHopListLen == 0) { pcapHopList[0] = pcapChanStart; pcapHopListLen = 1; }
@@ -551,6 +563,9 @@ static void pcapConfig(const uint8_t* payload, uint8_t len) {
                 if (cs >= 1 && cs <= 14) pcapChanStart = cs;
                 if (ce >= pcapChanStart && ce <= 14) pcapChanEnd = ce;
             }
+#ifdef OUISPY_DUAL_BAND
+            if (len >= 6) pcap5gMode = payload[5] & 0x03;
+#endif
             break;
         case PCAP_CTRL_STOP:  pcapStop(); break;
         case 0x10:

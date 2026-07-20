@@ -292,6 +292,7 @@ void engineSetAutoPcap(bool en) {
     autoPcapSave();
 }
 bool engineAutoPcapEnabled(void) { return autoPcapEnabled; }
+bool engineAutoPcapPending(void) { return autoPcapPending; }
 void engineSetAutoPcapDuration(uint16_t s) {
     uint16_t v = (s == 0 ? 10 : s);
     if (autoPcapDurationSec == v) return;

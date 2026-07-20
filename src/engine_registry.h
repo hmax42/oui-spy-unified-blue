@@ -59,6 +59,7 @@ void engineStateConfigApply(const uint8_t* data, uint8_t len);
 // window expires, the origin engine is re-enabled.
 void engineSetAutoPcap(bool enabled);
 bool engineAutoPcapEnabled(void);
+bool engineAutoPcapPending(void);
 void engineSetAutoPcapDuration(uint16_t seconds);
 uint16_t engineGetAutoPcapDuration(void);
 void engineSetAutoPcapCooldown(uint16_t seconds);
