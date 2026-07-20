@@ -15,3 +15,5 @@ for path in candidates:
         env.PrependENVPath("PATH", path)
         print("[c5] toolchain PATH += %s" % path)
         break
+
+env.Append(CXXFLAGS=["-Wno-volatile", "-Wno-deprecated-declarations", "-Wno-literal-suffix"])
