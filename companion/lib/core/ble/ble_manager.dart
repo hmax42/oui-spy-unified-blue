@@ -1453,6 +1453,7 @@ class BleManager {
     int mode = 0,
     int channelStart = 1,
     int channelEnd = 11,
+    int mode5g = 1,
     String? targetNodeId,
   }) async {
     if (_engineControl == null) return;
@@ -1460,7 +1461,7 @@ class BleManager {
       BleProtocol.encodeEngineConfig(
         engine: Engine.pcap,
         payload: Uint8List.fromList(
-          [0x01, mode, channelStart, channelEnd],
+          [0x01, mode, channelStart, channelEnd, 0x00, mode5g & 0x03],
         ),
       ),
     );
