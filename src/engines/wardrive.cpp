@@ -16,9 +16,6 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <NimBLEDevice.h>
-#ifdef OUISPY_NIMBLE2
-#include "esp_coexist.h"
-#endif
 
 // Flock predicates and OUI live in flock_match.h / flock_oui.h.
 
@@ -35,33 +32,16 @@ static uint8_t channelEnd   = 14;
 static unsigned long lastChannelHop = 0;
 
 #ifdef OUISPY_DUAL_BAND
-// 2.4-home / bounded 5GHz excursion order: a 2.4 home channel (1/6/11) every
-// 3 5GHz channels so the single C5 radio returns to 2.4 (BLE's band) sub-second
-// and the detection-notify stream to the app never stalls. Full both-band cover.
 static const uint8_t kDualBandChannels[] = {
-    1,  36, 40, 44,
-    6,  48, 52, 56,
-    11, 60, 64, 100,
-    1,  104, 108, 112,
-    6,  116, 120, 124,
-    11, 128, 132, 136,
-    1,  140, 144, 149,
-    6,  153, 157, 161,
-    11, 165
+    1, 6, 11, 36, 40, 44, 48, 149, 153, 157, 161, 165
 };
-static const uint16_t k5GHzMinDwellMs = 150;
 #endif
 
 static uint16_t priorityDwellMs = 300;
 static uint16_t normalDwellMs   = 110;
 
-#ifdef OUISPY_DUAL_BAND
-#define WD_MAX_HOPS 48
-#else
-#define WD_MAX_HOPS 32
-#endif
-static uint8_t  hopSchedule[WD_MAX_HOPS];
-static uint16_t hopDwellMs[WD_MAX_HOPS];
+static uint8_t  hopSchedule[32];
+static uint16_t hopDwellMs[32];
 static uint8_t  hopScheduleLen = 1;
 static uint8_t  hopIdx = 0;
 static uint8_t  currentChannel = 1;
@@ -77,31 +57,27 @@ static bool isPriorityChannel(uint8_t ch) {
 }
 
 static uint16_t scanDwellForChannel(uint8_t ch) {
-    uint16_t d = isPriorityChannel(ch) ? priorityDwellMs : normalDwellMs;
-#ifdef OUISPY_DUAL_BAND
-    if (ch > 14 && d < k5GHzMinDwellMs) d = k5GHzMinDwellMs;
-#endif
-    return d;
+    return isPriorityChannel(ch) ? priorityDwellMs : normalDwellMs;
 }
 
 static void buildHopSchedule(void) {
     hopScheduleLen = 0;
 #ifdef OUISPY_DUAL_BAND
-    for (uint8_t i = 0; i < sizeof(kDualBandChannels) && hopScheduleLen < WD_MAX_HOPS; i++) {
+    for (uint8_t i = 0; i < sizeof(kDualBandChannels) && hopScheduleLen < 32; i++) {
         if (!wifiChanEnabled(kDualBandChannels[i])) continue;
         hopSchedule[hopScheduleLen] = kDualBandChannels[i];
         hopDwellMs[hopScheduleLen] = scanDwellForChannel(kDualBandChannels[i]);
         hopScheduleLen++;
     }
 #else
-    for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < WD_MAX_HOPS; c++) {
+    for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < 32; c++) {
         hopSchedule[hopScheduleLen] = (uint8_t)c;
         hopDwellMs[hopScheduleLen] = scanDwellForChannel((uint8_t)c);
         hopScheduleLen++;
     }
 #endif
     const uint8_t kPri[3] = {1, 6, 11};
-    for (uint8_t i = 0; i < 3 && hopScheduleLen < WD_MAX_HOPS; i++) {
+    for (uint8_t i = 0; i < 3 && hopScheduleLen < 32; i++) {
         if (kPri[i] >= channelStart && kPri[i] <= channelEnd && wifiChanEnabled(kPri[i])) {
             hopSchedule[hopScheduleLen] = kPri[i];
             hopDwellMs[hopScheduleLen] = scanDwellForChannel(kPri[i]);
@@ -116,7 +92,7 @@ static void buildHopSchedule(void) {
         bool hasMeshCh = false;
         for (uint8_t i = 0; i < hopScheduleLen; i++)
             if (hopSchedule[i] == MESH_RENDEZVOUS_CH) { hasMeshCh = true; break; }
-        if (!hasMeshCh && hopScheduleLen < WD_MAX_HOPS) {
+        if (!hasMeshCh && hopScheduleLen < 32) {
             hopSchedule[hopScheduleLen] = MESH_RENDEZVOUS_CH;
             hopDwellMs[hopScheduleLen] = scanDwellForChannel(MESH_RENDEZVOUS_CH);
             hopScheduleLen++;
@@ -575,25 +551,10 @@ static void wardriveStart(void) {
         pWardriveScan = NimBLEDevice::getScan();
         bleCoexRegister(&wardriveBleCallbacks, true);
         pWardriveScan->setActiveScan(true);
-#ifdef OUISPY_NIMBLE2
-        // C5 single radio: a 99% duty scan monopolizes 2.4GHz and starves the
-        // phone GATT link. Lower duty leaves airtime for the connection so
-        // detections keep streaming and Stop is honored immediately.
-        pWardriveScan->setInterval(160);
-        pWardriveScan->setWindow(48);
-#else
         pWardriveScan->setInterval(100);
         pWardriveScan->setWindow(99);
-#endif
     }
 
-#ifdef OUISPY_NIMBLE2
-    // BALANCE beat both WIFI (link starves) and BT (WiFi starves, ~5x fewer
-    // networks) in HW A/B: it gives the best network yield while the 2.4-home
-    // interleave keeps the app's detection stream flowing.
-    esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
-    Serial.println("[WDCOEX] wardrive started, coex=BALANCE");
-#endif
     engineSetState(ENGINE_WARDRIVE, ESTATE_SCANNING);
     flockWifiHostSuspend(true);
     flockBleHostSuspend(true);
@@ -605,16 +566,8 @@ static void wardriveStart(void) {
 }
 
 static void wardriveStop(void) {
-#ifdef OUISPY_NIMBLE2
-    uint32_t stopT0 = millis();
-#endif
     Serial.println("[WARDRIVE] Stopping...");
     wardriveActive = false;
-#ifdef OUISPY_NIMBLE2
-    // Give BLE the radio immediately so the "all stopped" notify reaches the
-    // app without waiting behind WiFi — this is what made Stop hang for ~1min.
-    esp_coex_preference_set(ESP_COEX_PREFER_BT);
-#endif
     vTaskDelay(pdMS_TO_TICKS(50));
 
     if (pWardriveScan != nullptr) {
@@ -646,11 +599,7 @@ static void wardriveStop(void) {
     flockWifiHostSuspend(false);
     flockBleHostSuspend(false);
     detectorHostSuspend(false);
-#ifdef OUISPY_NIMBLE2
-    Serial.printf("[WARDRIVE] Stopped in %lums\n", (unsigned long)(millis() - stopT0));
-#else
     Serial.println("[WARDRIVE] Stopped");
-#endif
 }
 
 static volatile uint32_t g_wdHopCount = 0;
