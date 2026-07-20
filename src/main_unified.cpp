@@ -1178,6 +1178,143 @@ static void engineMatrixTask(void* arg) {
 }
 #endif
 
+#ifdef OUISPY_C5_ENGSTRESS
+static const EngineId kSE[] = {
+    ENGINE_WARDRIVE, ENGINE_FLOCK_WIFI, ENGINE_FLOCK_BLE,
+    ENGINE_DETECTOR, ENGINE_SKYSPY, ENGINE_FOXHUNTER
+};
+static const int kSEn = sizeof(kSE) / sizeof(kSE[0]);
+static const char* seName(EngineId e) {
+    switch (e) {
+        case ENGINE_DETECTOR: return "detector";
+        case ENGINE_FLOCK_BLE: return "flockBLE";
+        case ENGINE_FLOCK_WIFI: return "flockWiFi";
+        case ENGINE_FOXHUNTER: return "foxhunter";
+        case ENGINE_SKYSPY: return "skyspy";
+        case ENGINE_WARDRIVE: return "wardrive";
+        default: return "?";
+    }
+}
+static long seWaitUp(EngineId e, uint32_t toMs) {
+    uint32_t t0 = millis();
+    while (millis() - t0 < toMs) {
+        EngineState s = engineGetState(e);
+        if (s == ESTATE_SCANNING || s == ESTATE_ACTIVE || s == ESTATE_IDLE) return (long)(millis() - t0);
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    return -1;
+}
+static long seWaitDown(EngineId e, uint32_t toMs) {
+    uint32_t t0 = millis();
+    while (millis() - t0 < toMs) {
+        if (engineGetState(e) == ESTATE_DISABLED) return (long)(millis() - t0);
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    return -1;
+}
+static long seWaitMaskZero(uint32_t toMs) {
+    uint32_t t0 = millis();
+    while (millis() - t0 < toMs) {
+        if (engineGetActiveMask() == 0) return (long)(millis() - t0);
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    return -1;
+}
+static void engineStressTask(void* arg) {
+    (void)arg;
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    wifiSetBandMask(WIFI_BAND_24 | WIFI_BAND_5);
+    wardriveSetRadioMask(0x03);
+    int fails = 0;
+    Serial.println("[STRESS] ===== C5 engine start/stop/start (all engines) =====");
+
+    Serial.println("[STRESS] --- phase A: per-engine START/STOP/START x2 ---");
+    for (int i = 0; i < kSEn; i++) {
+        EngineId e = kSE[i];
+        for (int rep = 0; rep < 2; rep++) {
+            bool en1 = engineEnable(e);
+            long up1 = seWaitUp(e, 6000);
+            bool di1 = engineDisable(e);
+            long dn1 = seWaitDown(e, 6000);
+            long mz = seWaitMaskZero(6000);
+            bool pass = en1 && up1 >= 0 && dn1 >= 0 && mz >= 0;
+            if (!pass) fails++;
+            Serial.printf("[STRESS] %-10s cycle%d en=%d upMs=%ld dnMs=%ld maskZeroMs=%ld %s\n",
+                          seName(e), rep, en1 ? 1 : 0, up1, dn1, mz, pass ? "PASS" : "!!!FAIL!!!");
+            vTaskDelay(pdMS_TO_TICKS(250));
+        }
+    }
+
+    Serial.println("[STRESS] --- phase B: wardrive + sub-engines toggle while running ---");
+    engineEnable(ENGINE_WARDRIVE);
+    (void)seWaitUp(ENGINE_WARDRIVE, 6000);
+    static const EngineId subs[] = {ENGINE_FLOCK_WIFI, ENGINE_FLOCK_BLE, ENGINE_DETECTOR, ENGINE_FOXHUNTER};
+    for (unsigned s = 0; s < sizeof(subs) / sizeof(subs[0]); s++) {
+        for (int rep = 0; rep < 2; rep++) {
+            bool en = engineEnable(subs[s]);
+            long up = seWaitUp(subs[s], 6000);
+            bool di = engineDisable(subs[s]);
+            long dn = seWaitDown(subs[s], 6000);
+            bool wdStill = engineGetState(ENGINE_WARDRIVE) != ESTATE_DISABLED;
+            bool pass = en && up >= 0 && dn >= 0 && wdStill;
+            if (!pass) fails++;
+            Serial.printf("[STRESS] wd+%-9s cyc%d en=%d upMs=%ld dnMs=%ld wdAlive=%d %s\n",
+                          seName(subs[s]), rep, en ? 1 : 0, up, dn, wdStill ? 1 : 0,
+                          pass ? "PASS" : "!!!FAIL!!!");
+            (void)di;
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
+    }
+    engineDisableAll();
+    long wdStop = seWaitMaskZero(6000);
+    if (wdStop < 0) fails++;
+    Serial.printf("[STRESS] phaseB wardrive stopAll maskZeroMs=%ld %s\n",
+                  wdStop, wdStop >= 0 ? "PASS" : "!!!FAIL!!!");
+
+    Serial.println("[STRESS] --- phase C: all-on / all-off x3 ---");
+    for (int rep = 0; rep < 3; rep++) {
+        uint32_t t0 = millis();
+        for (int i = 0; i < kSEn; i++) engineEnable(kSE[i]);
+        uint32_t upMs = millis() - t0;
+        uint8_t mask = engineGetActiveMask();
+        vTaskDelay(pdMS_TO_TICKS(1500));
+        engineDisableAll();
+        long mz = seWaitMaskZero(8000);
+        bool pass = mz >= 0;
+        if (!pass) fails++;
+        Serial.printf("[STRESS] all-on cyc%d upMs=%lu mask=0x%02X stopMs=%ld %s\n",
+                      rep, (unsigned long)upMs, mask, mz, pass ? "PASS" : "!!!FAIL!!!");
+        vTaskDelay(pdMS_TO_TICKS(400));
+    }
+
+    Serial.println("[STRESS] --- phase D: RAPID 40x all on/off (catch left-running) ---");
+    int rapidFail = 0; long maxStop = 0;
+    for (int i = 0; i < 40; i++) {
+        for (int j = 0; j < kSEn; j++) engineEnable(kSE[j]);
+        vTaskDelay(pdMS_TO_TICKS(150));
+        engineDisableAll();
+        long mz = seWaitMaskZero(8000);
+        if (mz < 0) rapidFail++;
+        else if (mz > maxStop) maxStop = mz;
+        vTaskDelay(pdMS_TO_TICKS(120));
+    }
+    if (rapidFail) fails++;
+    Serial.printf("[STRESS] RAPID 40x leftRunning=%d maxStopMs=%ld %s\n",
+                  rapidFail, maxStop, rapidFail == 0 ? "PASS" : "!!!FAIL!!!");
+
+    engineDisableAll();
+    long fmz = seWaitMaskZero(8000);
+    uint8_t finalMask = engineGetActiveMask();
+    bool allOff = fmz >= 0 && finalMask == 0;
+    Serial.printf("[STRESS] FINAL mask=0x%02X %s\n", finalMask,
+                  allOff ? "ALL-OFF-OK" : "!!!ENGINES-LEFT-RUNNING!!!");
+    Serial.printf("[STRESS] ===== DONE totalFails=%d heap=%lu %s =====\n",
+                  fails, (unsigned long)esp_get_free_heap_size(),
+                  (fails == 0 && allOff) ? "ALL-PASS" : "!!!HAS-FAILURES!!!");
+    vTaskDelete(NULL);
+}
+#endif
+
 #ifdef OUISPY_SKYSPY_MESH_TEST
 static void skyspyMeshTestEnable(uint8_t eng) {
     EngineCommand ec = {};
@@ -1382,6 +1519,10 @@ void setup() {
 #ifdef OUISPY_ENGINE_MATRIX
     xTaskCreatePinnedToCore(engineMatrixTask, "matrix", 6144, NULL, 1, NULL, 0);
     Serial.println("[INIT] ENGINE MATRIX armed (band x engine x stress on hardware)");
+#endif
+#ifdef OUISPY_C5_ENGSTRESS
+    xTaskCreatePinnedToCore(engineStressTask, "engstress", 6144, NULL, 1, NULL, 0);
+    Serial.println("[INIT] C5 ENGINE STRESS armed (start/stop/start all engines)");
 #endif
 #else
     xTaskCreatePinnedToCore(engineSelftestTask, "selftest", 4096, NULL, 1, NULL, 1);
