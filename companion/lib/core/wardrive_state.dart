@@ -733,11 +733,15 @@ class WardriveController extends ChangeNotifier {
       Engine.pcap,
     ];
     try {
-      for (final engine in wardriveEngines) {
-        try {
-          await _ble.disableEngine(engine);
-        } catch (e) {
-          DebugLog.log('WARDRIVE: disable $engine error: $e');
+      if (_ble.board.toLowerCase().contains('c5')) {
+        await _ble.disableAllEngines();
+      } else {
+        for (final engine in wardriveEngines) {
+          try {
+            await _ble.disableEngine(engine);
+          } catch (e) {
+            DebugLog.log('WARDRIVE: disable $engine error: $e');
+          }
         }
       }
     } finally {
