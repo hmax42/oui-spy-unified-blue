@@ -70,17 +70,35 @@ static uint16_t scanDwellForChannel(uint8_t ch) {
 static void buildHopSchedule(void) {
     hopScheduleLen = 0;
 #ifdef OUISPY_DUAL_BAND
-    for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < WD_MAX_HOPS; c++) {
-        if (!wifiChanEnabled((uint8_t)c)) continue;
-        hopSchedule[hopScheduleLen] = (uint8_t)c;
-        hopDwellMs[hopScheduleLen] = scanDwellForChannel((uint8_t)c);
-        hopScheduleLen++;
-    }
-    for (uint8_t i = 0; i < sizeof(k5GhzChannels) && hopScheduleLen < WD_MAX_HOPS; i++) {
-        if (!wifiChanEnabled(k5GhzChannels[i])) continue;
-        hopSchedule[hopScheduleLen] = k5GhzChannels[i];
-        hopDwellMs[hopScheduleLen] = scanDwellForChannel(k5GhzChannels[i]);
-        hopScheduleLen++;
+    {
+        const bool en24 = wifiChanEnabled(1);
+        const bool en5  = wifiChanEnabled(36);
+        if (en24 && en5) {
+            uint16_t h = channelStart;
+            for (uint8_t i = 0; i < sizeof(k5GhzChannels) && hopScheduleLen < WD_MAX_HOPS; i++) {
+                if ((i % 2) == 0 && hopScheduleLen < WD_MAX_HOPS) {
+                    hopSchedule[hopScheduleLen] = (uint8_t)h;
+                    hopDwellMs[hopScheduleLen] = scanDwellForChannel((uint8_t)h);
+                    hopScheduleLen++;
+                    h = (h >= channelEnd) ? channelStart : (uint16_t)(h + 1);
+                }
+                hopSchedule[hopScheduleLen] = k5GhzChannels[i];
+                hopDwellMs[hopScheduleLen] = scanDwellForChannel(k5GhzChannels[i]);
+                hopScheduleLen++;
+            }
+        } else if (en24) {
+            for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < WD_MAX_HOPS; c++) {
+                hopSchedule[hopScheduleLen] = (uint8_t)c;
+                hopDwellMs[hopScheduleLen] = scanDwellForChannel((uint8_t)c);
+                hopScheduleLen++;
+            }
+        } else {
+            for (uint8_t i = 0; i < sizeof(k5GhzChannels) && hopScheduleLen < WD_MAX_HOPS; i++) {
+                hopSchedule[hopScheduleLen] = k5GhzChannels[i];
+                hopDwellMs[hopScheduleLen] = scanDwellForChannel(k5GhzChannels[i]);
+                hopScheduleLen++;
+            }
+        }
     }
 #else
     for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < WD_MAX_HOPS; c++) {
