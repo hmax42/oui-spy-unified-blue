@@ -122,11 +122,11 @@ One Flutter app for iOS, macOS, and Android.
 **Detection engines.** 802.11 frames carry three MAC fields — addr1 (receiver), addr2 (transmitter), addr3 (BSSID); several engines check all three so a target is caught in any role.
 
 - **Detector** — your watchlist (MACs, OUI prefixes, name patterns, 16-bit BLE service UUIDs) on BLE adverts and Wi-Fi promiscuous frames, plus six built-in signatures (off by default): Find My/AirTag (persistence-gated, anti-stalking), Flipper Zero (service UUIDs `0x3081`/`82`/`83`), Wi-Fi deauth/disassoc storms (rate-gated), directed probe SSIDs, Pwnagotchi, Meta glasses.
-- **Flock** — shared OUI table (`flock_oui.h`); a core set is always on, an extended set (broad chipset vendors) is off by default to avoid false positives. Wi-Fi runs promiscuous on channels 1/6/11 with a wildcard probe per hop; BLE matches OUI, name (`Penguin`, `Flock`, `FS-`, …), manufacturer ID `0x09C8` (XUNTONG), and Raven GATT UUIDs.
+- **Flock** — shared OUI table (`flock_oui.h`); a core set is always on, an extended set (broad chipset vendors) is off by default to avoid false positives. Wi-Fi runs promiscuous on 2.4 GHz **channels 1/6/11 only** (on the C5, plus non-DFS 5 GHz 36–48/149–165) with a wildcard probe per hop — a Flock camera on any other 2.4 channel will not be seen; BLE matches OUI, name (`Penguin`, `Flock`, `FS-`, …), manufacturer ID `0x09C8` (XUNTONG), and Raven GATT UUIDs.
 - **Sky Spy** — Open Drone ID over BLE + Wi-Fi (NAN/beacon); decodes operator/UAV ID, position, altitude, speed, heading.
 - **Foxhunter** — one target MAC; buzzer cadence tracks RSSI across Wi-Fi and BLE.
 - **UniPwn** — Unitree robots by BLE name prefix (`Go2_`, `G1_`, `H1_`, …): detect → connect → exploit.
-- **Wardrive** — logs every AP + BLE device (SSID, BSSID, channel, auth mode), GPS-stamped, WiGLE-compatible; the C5 also sweeps 5 GHz.
+- **Wardrive** — logs every AP + BLE device (SSID, BSSID, channel, auth mode), GPS-stamped, WiGLE-compatible. Sweeps your configured 2.4 GHz range (default 1–14); on the C5 it also sweeps the full 5 GHz set (UNII-1/2/2e/3, 36–165 incl DFS).
 
 **Mesh link.** Nodes talk to the manager over encrypted **ESP-NOW** (AES-GCM), broadcast on one shared channel (2.4 GHz **channel 1**). It's a single-hop star — every node reaches the manager directly, with no node-to-node relay (max 6 nodes, up to ~200 m per link in open line of sight). Scanning nodes weave back to channel 1 each sweep to pass traffic, so mesh chatter and channel-split scanning share the radio. A node silent for 45 s drops off and rejoins on its own when back in range. Manager settings (buzzer, LED, alert timing, ignore list, wardrive radio, Wi-Fi band) push to every node and override their local copies.
 
