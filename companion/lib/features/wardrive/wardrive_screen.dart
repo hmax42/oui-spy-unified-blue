@@ -1500,6 +1500,9 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   }
 
   Widget _runControls(WidgetRef ref, WardriveController wd) {
+    if (wd.radioTransition != null) {
+      return const SizedBox.shrink();
+    }
     return switch (wd.state) {
       WardriveState.idle => const SizedBox.shrink(),
       WardriveState.running => Row(mainAxisSize: MainAxisSize.min, children: [

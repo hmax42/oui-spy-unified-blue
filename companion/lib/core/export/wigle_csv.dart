@@ -11,18 +11,24 @@ class WigleCsv {
   static const _version = '1.0.0';
   static final _dateFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
 
-  static String generate(List<Detection> detections, {IgnoreListState? ignoreList, GeofenceFilter? geofenceFilter}) {
+  static String generate(List<Detection> detections, {IgnoreListState? ignoreList, GeofenceFilter? geofenceFilter, String board = ''}) {
     final buffer = StringBuffer();
 
-    // Pre-header 
+    final b = board.toLowerCase();
+    final device = b.contains('c5') ? 'ESP32-C5'
+                 : b.contains('c3') ? 'ESP32-C3'
+                 : 'ESP32-S3';
+    final boardName = b.contains('devkit') ? 'DevKitC' : 'XIAO';
+
+    // Pre-header
     buffer.writeln(
       'WigleWifi-1.6,'
       'appRelease=$_version,'
       'model=OUI-SPY,'
       'release=$_version,'
-      'device=ESP32-S3,'
+      'device=$device,'
       'display=companion,'
-      'board=XIAO,'
+      'board=$boardName,'
       'brand=colonelpanic,'
       'star=Sol,'
       'body=3,'
