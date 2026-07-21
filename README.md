@@ -126,7 +126,7 @@ One Flutter app for iOS, macOS, and Android.
 - **Sky Spy** — Open Drone ID over BLE + Wi-Fi (NAN/beacon); decodes operator/UAV ID, position, altitude, speed, heading.
 - **Foxhunter** — one target MAC; buzzer cadence tracks RSSI across Wi-Fi and BLE.
 - **UniPwn** — Unitree robots by BLE name prefix (`Go2_`, `G1_`, `H1_`, …): detect → connect → exploit.
-- **Wardrive** — logs every AP + BLE device (SSID, BSSID, channel, auth mode), GPS-stamped, WiGLE-compatible. Sweeps your configured 2.4 GHz range (default 1–14); on the C5 it also sweeps the full 5 GHz set (UNII-1/2/2e/3, 36–165 incl DFS).
+- **Wardrive** — logs every AP + BLE device (SSID, BSSID, channel, auth mode), GPS-stamped, WiGLE-compatible. Sweeps your configured 2.4 GHz range (default 1–14) — **every channel in range, not just 1/6/11**; on the C5 a config toggle (**All / 1·6·11**) picks whether 2.4 covers the full range or only 1/6/11, and it also sweeps the full 5 GHz set (UNII-1/2/2e/3, 36–165 incl DFS).
 
 **Mesh link.** Nodes talk to the manager over encrypted **ESP-NOW** (AES-GCM), broadcast on one shared channel (2.4 GHz **channel 1**). It's a single-hop star — every node reaches the manager directly, with no node-to-node relay (max 6 nodes, up to ~200 m per link in open line of sight). Scanning nodes weave back to channel 1 each sweep to pass traffic, so mesh chatter and channel-split scanning share the radio. A node silent for 45 s drops off and rejoins on its own when back in range. Manager settings (buzzer, LED, alert timing, ignore list, wardrive radio, Wi-Fi band) push to every node and override their local copies. The **ESP32-C5 does not participate in the mesh** — it runs standalone (connected directly to your phone) and cannot be a fleet node under a manager.
 
