@@ -2310,7 +2310,7 @@ class _ConfigTitleBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final gap = configGap(context);
+    final gap = barGap(context);
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
@@ -2321,14 +2321,14 @@ class _ConfigTitleBar extends StatelessWidget {
             children: [
               Text(
                 'CONFIG',
-                style: configLabelStyle(context, t.textDim, bold: false)
+                style: barLabelStyle(context, t.textDim, bold: false)
                     .copyWith(letterSpacing: 3),
               ),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: gap),
                 child: Text(
                   '·',
-                  style: configLabelStyle(context, t.textDim, bold: false),
+                  style: barLabelStyle(context, t.textDim, bold: false),
                 ),
               ),
               Flexible(
@@ -2336,15 +2336,15 @@ class _ConfigTitleBar extends StatelessWidget {
                   kConfigSections[index].label,
                   softWrap: false,
                   overflow: TextOverflow.fade,
-                  style: configLabelStyle(context, t.textPrimary)
+                  style: barLabelStyle(context, t.textPrimary)
                       .copyWith(letterSpacing: 3),
                 ),
               ),
               const Spacer(),
               if (loading)
                 SizedBox(
-                  width: configIconSize(context) * 0.8,
-                  height: configIconSize(context) * 0.8,
+                  width: barIconSize(context) * 0.8,
+                  height: barIconSize(context) * 0.8,
                   child: const CircularProgressIndicator(
                     strokeWidth: 1.5, color: AppTheme.accent,
                   ),
@@ -3704,7 +3704,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
       });
 
   Future<void> _openFilterSheet() {
-    return showConfigSheet<void>(
+    return showCommandSheet<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
@@ -3717,7 +3717,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
               .where((d) => d['latitude'] == null || d['longitude'] == null)
               .length;
 
-          return ConfigSheet(
+          return CommandSheet(
             title: 'FILTER',
             trailing: _activeFilterCount == 0
                 ? null
@@ -3725,17 +3725,17 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                     onPressed: () => apply(_clearFilters),
                     child: Text(
                       'RESET',
-                      style: configLabelStyle(ctx, AppTheme.accent),
+                      style: barLabelStyle(ctx, AppTheme.accent),
                     ),
                   ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ConfigSheetGroup(
+                CommandSheetGroup(
                   label: 'SOURCE',
                   child: Wrap(
-                    spacing: configGap(ctx),
-                    runSpacing: configGap(ctx),
+                    spacing: barGap(ctx),
+                    runSpacing: barGap(ctx),
                     children: [
                       _FilterChip(
                         label: 'ALL',
@@ -3772,11 +3772,11 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                     ],
                   ),
                 ),
-                ConfigSheetGroup(
+                CommandSheetGroup(
                   label: 'RADIO',
                   child: Wrap(
-                    spacing: configGap(ctx),
-                    runSpacing: configGap(ctx),
+                    spacing: barGap(ctx),
+                    runSpacing: barGap(ctx),
                     children: [
                       for (final (sel, label) in const [
                         (_RadioSel.all, 'ALL'),
@@ -3793,11 +3793,11 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                     ],
                   ),
                 ),
-                ConfigSheetGroup(
+                CommandSheetGroup(
                   label: 'LOCATION',
                   child: Wrap(
-                    spacing: configGap(ctx),
-                    runSpacing: configGap(ctx),
+                    spacing: barGap(ctx),
+                    runSpacing: barGap(ctx),
                     children: [
                       _FilterChip(
                         label: 'ANY',
@@ -3817,7 +3817,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                     ],
                   ),
                 ),
-                ConfigSheetGroup(
+                CommandSheetGroup(
                   label: 'METHOD',
                   child: _DetDropdown(
                     icon: Icons.tune,
@@ -3841,19 +3841,19 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
   }
 
   Future<void> _openSortSheet() {
-    return showConfigSheet<void>(
+    return showCommandSheet<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => ConfigSheet(
+        builder: (ctx, setSheet) => CommandSheet(
           title: 'SORT',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ConfigSheetGroup(
+              CommandSheetGroup(
                 label: 'ORDER BY',
                 child: Wrap(
-                  spacing: configGap(ctx),
-                  runSpacing: configGap(ctx),
+                  spacing: barGap(ctx),
+                  runSpacing: barGap(ctx),
                   children: [
                     for (final s in _DetSort.values)
                       _SortBtn(
@@ -3869,7 +3869,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                 ),
               ),
               const Divider(height: 1),
-              ConfigSheetTile(
+              CommandSheetTile(
                 icon: _ascending ? Icons.arrow_upward : Icons.arrow_downward,
                 label: _ascending ? 'ASCENDING' : 'DESCENDING',
                 subtitle: _sortDirectionHint,
@@ -3897,14 +3897,14 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
 
   Future<void> _openActionSheet() {
     final items = _filtered;
-    return showConfigSheet<void>(
+    return showCommandSheet<void>(
       context: context,
-      builder: (ctx) => ConfigSheet(
+      builder: (ctx) => CommandSheet(
         title: 'ACTIONS',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ConfigSheetTile(
+            CommandSheetTile(
               icon: _showMap ? Icons.view_list : Icons.map,
               label: _showMap ? 'LIST VIEW' : 'MAP VIEW',
               subtitle: _showMap
@@ -3915,7 +3915,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                 setState(() => _showMap = !_showMap);
               },
             ),
-            ConfigSheetTile(
+            CommandSheetTile(
               icon: _searchOpen ? Icons.search_off : Icons.search,
               label: _searchOpen ? 'CLOSE SEARCH' : 'SEARCH',
               subtitle: 'MAC, name, SSID, method',
@@ -3925,7 +3925,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
               },
             ),
             const Divider(height: 1),
-            ConfigSheetTile(
+            CommandSheetTile(
               icon: Icons.ios_share,
               label: 'EXPORT CSV',
               subtitle: '${items.length} shown',
@@ -3936,7 +3936,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                       _exportCsv(context, items);
                     },
             ),
-            ConfigSheetTile(
+            CommandSheetTile(
               icon: Icons.refresh,
               label: 'RESCAN & RECLASSIFY',
               subtitle: 'Re-run OUI matching over stored sessions',
@@ -3948,7 +3948,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                       _rescan();
                     },
             ),
-            ConfigSheetTile(
+            CommandSheetTile(
               icon: Icons.delete_sweep,
               label: 'CLEAR ALL',
               subtitle: '${_detections.length} detections in database',
@@ -3980,20 +3980,20 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
         Expanded(child: _buildBody(t, items)),
         ConfigBottomBar(
           actions: [
-            ConfigBarAction(
+            CommandBarAction(
               icon: Icons.filter_alt,
               label: 'FILTER',
               badge: _activeFilterCount,
               active: _activeFilterCount > 0,
               onTap: _detections.isEmpty ? null : _openFilterSheet,
             ),
-            ConfigBarAction(
+            CommandBarAction(
               icon: _ascending ? Icons.arrow_upward : Icons.arrow_downward,
               label: _sort.label,
               active: true,
               onTap: _detections.isEmpty ? null : _openSortSheet,
             ),
-            ConfigBarAction(
+            CommandBarAction(
               icon: _rescanning ? Icons.hourglass_top : Icons.more_horiz,
               label: 'MORE',
               onTap: _openActionSheet,
@@ -4005,7 +4005,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
   }
 
   Widget _buildSearchField(ResolvedTheme t) {
-    final gap = configGap(context);
+    final gap = barGap(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(gap * 1.5, gap, gap * 1.5, gap),
       child: TextField(
@@ -4022,9 +4022,9 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
             horizontal: gap * 1.5,
             vertical: gap * 1.5,
           ),
-          prefixIcon: Icon(Icons.search, size: configIconSize(context)),
+          prefixIcon: Icon(Icons.search, size: barIconSize(context)),
           suffixIcon: IconButton(
-            icon: Icon(Icons.close, size: configIconSize(context)),
+            icon: Icon(Icons.close, size: barIconSize(context)),
             onPressed: _toggleSearch,
           ),
           border: OutlineInputBorder(
@@ -4037,7 +4037,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
   }
 
   Widget _buildFilterStrip(ResolvedTheme t, int shown) {
-    final gap = configGap(context);
+    final gap = barGap(context);
     final chips = <Widget>[
       if (_engineFilter != null)
         _ActiveFilterChip(
@@ -4087,7 +4087,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
         children: [
           Text(
             '$shown / ${_detections.length}',
-            style: configLabelStyle(context, t.textDim, bold: false),
+            style: barLabelStyle(context, t.textDim, bold: false),
           ),
           SizedBox(width: gap),
           Expanded(
@@ -4139,7 +4139,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
           },
           child: Text(
             'CLEAR FILTERS',
-            style: configLabelStyle(context, AppTheme.accent),
+            style: barLabelStyle(context, AppTheme.accent),
           ),
         ),
       );
@@ -4147,7 +4147,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
 
     if (_showMap) return _buildMapView(items, t);
 
-    final gap = configGap(context);
+    final gap = barGap(context);
     return ListView.builder(
       padding: EdgeInsets.symmetric(horizontal: gap * 1.5, vertical: gap * 0.5),
       itemCount: items.length,
@@ -4475,7 +4475,7 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gap = configGap(context);
+    final gap = barGap(context);
     final radius = BorderRadius.circular(kMinInteractiveDimension);
     return Material(
       color: selected
@@ -4502,12 +4502,12 @@ class _FilterChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label, style: configLabelStyle(context, color)),
+              Text(label, style: barLabelStyle(context, color)),
               if (count != null) ...[
                 SizedBox(width: gap * 0.75),
                 Text(
                   '$count',
-                  style: configLabelStyle(
+                  style: barLabelStyle(
                     context,
                     color.withValues(alpha: 0.65),
                     bold: false,
@@ -4534,7 +4534,7 @@ class _ActiveFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gap = configGap(context);
+    final gap = barGap(context);
     final radius = BorderRadius.circular(kMinInteractiveDimension);
     return Material(
       color: color.withValues(alpha: 0.18),
@@ -4558,11 +4558,11 @@ class _ActiveFilterChip extends StatelessWidget {
                   label,
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
-                  style: configLabelStyle(context, color),
+                  style: barLabelStyle(context, color),
                 ),
               ),
               SizedBox(width: gap * 0.5),
-              Icon(Icons.close, size: configIconSize(context) * 0.8, color: color),
+              Icon(Icons.close, size: barIconSize(context) * 0.8, color: color),
             ],
           ),
         ),
@@ -4586,18 +4586,18 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final gap = configGap(context);
+    final gap = barGap(context);
     return Center(
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: gap * 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: configIconSize(context) * 3, color: t.textDim),
+            Icon(icon, size: barIconSize(context) * 3, color: t.textDim),
             SizedBox(height: gap * 1.5),
             Text(
               title,
-              style: configLabelStyle(context, t.textDim)
+              style: barLabelStyle(context, t.textDim)
                   .copyWith(letterSpacing: 2),
             ),
             SizedBox(height: gap * 0.75),
@@ -4636,8 +4636,8 @@ class _DetDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final gap = configGap(context);
-    final iconSize = configIconSize(context);
+    final gap = barGap(context);
+    final iconSize = barIconSize(context);
     final radius = BorderRadius.circular(gap);
     return Material(
       color: active ? AppTheme.accent.withValues(alpha: 0.12) : t.surfaceLight,
@@ -4661,13 +4661,13 @@ class _DetDropdown extends StatelessWidget {
               Icon(icon,
                   size: iconSize, color: active ? AppTheme.accent : t.textDim),
               SizedBox(width: gap),
-              Text(label, style: configLabelStyle(context, t.textDim)),
+              Text(label, style: barLabelStyle(context, t.textDim)),
               SizedBox(width: gap),
               Expanded(
                 child: Text(
                   value,
                   overflow: TextOverflow.ellipsis,
-                  style: configLabelStyle(
+                  style: barLabelStyle(
                       context, active ? AppTheme.accent : t.textPrimary),
                 ),
               ),
@@ -4695,7 +4695,7 @@ class _SortBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final gap = configGap(context);
+    final gap = barGap(context);
     final radius = BorderRadius.circular(gap);
     return Material(
       color: active ? AppTheme.accent.withValues(alpha: 0.18) : t.surfaceLight,
@@ -4719,14 +4719,14 @@ class _SortBtn extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: configLabelStyle(
+                style: barLabelStyle(
                     context, active ? AppTheme.accent : t.textSecondary),
               ),
               if (active) ...[
                 SizedBox(width: gap * 0.75),
                 Icon(
                   ascending ? Icons.arrow_upward : Icons.arrow_downward,
-                  size: configIconSize(context) * 0.9,
+                  size: barIconSize(context) * 0.9,
                   color: AppTheme.accent,
                 ),
               ],
@@ -6339,29 +6339,29 @@ class _PcapInlineSectionState extends ConsumerState<_PcapInlineSection> {
           onTap: widget.standalone ? null : _toggleExpanded,
           child: Padding(
             padding: EdgeInsets.fromLTRB(
-              configGap(context) * 1.5,
-              configGap(context),
-              configGap(context),
-              configGap(context) * 0.5,
+              barGap(context) * 1.5,
+              barGap(context),
+              barGap(context),
+              barGap(context) * 0.5,
             ),
             child: Row(
               children: [
                 if (!widget.standalone) ...[
                   Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
-                      size: configIconSize(context), color: t.textDim),
-                  SizedBox(width: configGap(context) * 0.5),
+                      size: barIconSize(context), color: t.textDim),
+                  SizedBox(width: barGap(context) * 0.5),
                 ],
                 Text("SAVED PCAPS",
-                    style: configLabelStyle(context, t.textDim)
+                    style: barLabelStyle(context, t.textDim)
                         .copyWith(letterSpacing: 2)),
                 const Spacer(),
                 IconButton(
-                  icon: Icon(Icons.refresh, size: configIconSize(context)),
+                  icon: Icon(Icons.refresh, size: barIconSize(context)),
                   onPressed: _expanded ? _refresh : null,
                 ),
                 IconButton(
                   icon: Icon(Icons.delete_sweep,
-                      size: configIconSize(context), color: AppTheme.error),
+                      size: barIconSize(context), color: AppTheme.error),
                   tooltip: "Delete all",
                   onPressed: _expanded ? _deleteAll : null,
                 ),

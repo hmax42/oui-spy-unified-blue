@@ -14,6 +14,7 @@ import 'package:oui_spy/features/feed/detection_row.dart';
 import 'package:oui_spy/features/feed/feed_stats_header.dart';
 import 'package:oui_spy/features/feed/filter_bar.dart';
 import 'package:oui_spy/theme/app_theme.dart';
+import 'package:oui_spy/widgets/command_bar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -44,6 +45,52 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   bool _showStats = true;
   FeedMetric _sortMetric = FeedMetric.time;
   bool _sortAscending = false; // false = descending (newest/strongest/most first)
+  bool _searchOpen = false;
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _allEnginesActive =>
+      _activeFilters.length == Engine.values.length && _activeRadio == null;
+
+  int get _activeFilterCount {
+    var n = 0;
+    if (!_allEnginesActive) n++;
+    if (_selectedNode != null) n++;
+    return n;
+  }
+
+  String _engineFilterLabel() {
+    for (final p in FilterPreset.values) {
+      if (p == FilterPreset.all) continue;
+      if (p.matches(_activeFilters, _activeRadio)) return p.label;
+    }
+    if (_activeFilters.isEmpty) return 'NO ENGINES';
+    return '${_activeFilters.length} ENGINES';
+  }
+
+  String _nodeLabel(String Function(String) labelForNode) {
+    if (_selectedNode == null) return 'ALL';
+    if (_selectedNode!.isEmpty) return 'LOCAL';
+    return labelForNode(_selectedNode!);
+  }
+
+  void _toggleSearch() => setState(() {
+        _searchOpen = !_searchOpen;
+        if (!_searchOpen) {
+          _searchCtrl.clear();
+          _searchQuery = '';
+        }
+      });
+
+  void _resetEngineFilters() => setState(() {
+        _activeFilters = Engine.values.toSet();
+        _activeRadio = null;
+      });
 
   List<Detection> _mergeFlockFromWardrive(
     List<Detection> feedDetections,
@@ -149,43 +196,27 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       return byTime;
     });
 
+    final gap = barGap(context);
+    final hasQuery = _searchQuery.trim().isNotEmpty;
+
     return Scaffold(
       backgroundColor: t.background,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              padding: EdgeInsets.fromLTRB(gap * 2, gap * 1.5, gap * 2, gap * 1.5),
               child: Row(
                 children: [
                   Text('FEED', style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         letterSpacing: 3, color: t.textDim, fontWeight: FontWeight.w700,
                       )),
                   const Spacer(),
-                  _HeaderIconButton(
-                    icon: _showStats ? Icons.analytics : Icons.analytics_outlined,
-                    active: _showStats,
-                    enabled: true,
-                    onTap: () => setState(() => _showStats = !_showStats),
-                  ),
-                  const SizedBox(width: 8),
-                  _HeaderIconButton(
-                    icon: Icons.ios_share,
-                    active: false,
-                    enabled: filtered.isNotEmpty,
-                    onTap: filtered.isEmpty ? null : () => _exportCsv(context, filtered),
-                  ),
-                  const SizedBox(width: 8),
-                  _HeaderIconButton(
-                    icon: Icons.delete_sweep,
-                    active: false,
-                    enabled: state.recentDetections.isNotEmpty,
-                    onTap: state.recentDetections.isEmpty ? null : () => _clearAll(context),
-                  ),
-                  const SizedBox(width: 10),
                   if (state.isManagerConnected && sourceNodes.isNotEmpty) ...[
-                    const Icon(Icons.hub, size: 14, color: AppTheme.warning),
-                    const SizedBox(width: 4),
+                    Icon(Icons.hub, size: barIconSize(context) * 0.8,
+                        color: AppTheme.warning),
+                    SizedBox(width: gap * 0.5),
                   ],
                   Text('${state.totalDetections}', style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         color: AppTheme.accent, fontFamily: 'monospace', fontWeight: FontWeight.w700,
@@ -193,30 +224,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 ],
               ),
             ),
-            FilterBar(
-              activeFilters: _activeFilters,
-              activeRadio: _activeRadio,
-              searchQuery: _searchQuery,
-              onFiltersChanged: (f) => setState(() {
-                _activeFilters = f;
-                _activeRadio = null;
-              }),
-              onPresetApplied: (p) => setState(() {
-                _activeFilters = p.resolve();
-                _activeRadio = p.radio;
-              }),
-              onSearchChanged: (q) => setState(() => _searchQuery = q),
-              sortMetric: _sortMetric,
-              sortAscending: _sortAscending,
-              onSortChanged: (m, asc) => setState(() {
-                _sortMetric = m;
-                _sortAscending = asc;
-              }),
-              sourceNodes: sourceNodes,
-              selectedNode: _selectedNode,
-              onNodeChanged: (node) => setState(() => _selectedNode = node),
-              labelForNode: state.labelForNode,
-            ),
+            if (_searchOpen)
+              CommandSearchField(
+                controller: _searchCtrl,
+                hintText: 'MAC, name, method, node…',
+                onChanged: (q) => setState(() => _searchQuery = q),
+                onClose: _toggleSearch,
+              ),
+            if (_activeFilterCount > 0 || hasQuery)
+              _buildFilterStrip(t, filtered.length, merged.length,
+                  state.labelForNode),
             const Divider(height: 1),
             if (_showStats && filtered.length >= 2)
               FeedStatsHeader(detections: filtered),
@@ -236,6 +253,354 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                         return DetectionRow(detection: item as Detection);
                       },
                     ),
+            ),
+            CommandBar(
+              actions: [
+                CommandBarAction(
+                  icon: Icons.filter_alt,
+                  label: 'FILTER',
+                  badge: _activeFilterCount,
+                  active: _activeFilterCount > 0,
+                  onTap: () => _openFilterSheet(sourceNodes, state.labelForNode),
+                ),
+                CommandBarAction(
+                  icon: _sortAscending
+                      ? Icons.arrow_upward
+                      : Icons.arrow_downward,
+                  label: _sortMetric.label,
+                  active: true,
+                  onTap: _openSortSheet,
+                ),
+                CommandBarAction(
+                  icon: Icons.more_horiz,
+                  label: 'MORE',
+                  onTap: () => _openActionSheet(filtered, state),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterStrip(
+    ResolvedTheme t,
+    int shown,
+    int total,
+    String Function(String) labelForNode,
+  ) {
+    final gap = barGap(context);
+    final chips = <Widget>[
+      if (!_allEnginesActive)
+        CommandActiveChip(
+          label: _engineFilterLabel(),
+          color: AppTheme.accent,
+          onClear: _resetEngineFilters,
+        ),
+      if (_selectedNode != null)
+        CommandActiveChip(
+          label: _nodeLabel(labelForNode),
+          color: AppTheme.warning,
+          onClear: () => setState(() => _selectedNode = null),
+        ),
+      if (_searchQuery.trim().isNotEmpty)
+        CommandActiveChip(
+          label: '"${_searchQuery.trim()}"',
+          color: AppTheme.accent,
+          onClear: _toggleSearch,
+        ),
+    ];
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(gap * 1.5, gap * 0.5, gap * 1.5, gap * 0.5),
+      child: Row(
+        children: [
+          Text('$shown / $total',
+              style: barLabelStyle(context, t.textDim, bold: false)),
+          SizedBox(width: gap),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                children: [
+                  for (final c in chips) ...[
+                    SizedBox(width: gap * 0.75),
+                    c,
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openFilterSheet(
+    Set<String> sourceNodes,
+    String Function(String) labelForNode,
+  ) {
+    return showCommandSheet<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          void apply(VoidCallback fn) {
+            fn();
+            setSheet(() {});
+          }
+
+          final t = AppTheme.of(ctx);
+          final gap = barGap(ctx);
+          return CommandSheet(
+            title: 'FILTER',
+            trailing: _activeFilterCount == 0
+                ? null
+                : TextButton(
+                    onPressed: () => apply(() {
+                      _resetEngineFilters();
+                      setState(() => _selectedNode = null);
+                    }),
+                    child: Text('RESET',
+                        style: barLabelStyle(ctx, AppTheme.accent)),
+                  ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                CommandSheetGroup(
+                  label: 'PRESET',
+                  child: Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: [
+                      for (final preset in FilterPreset.values)
+                        CommandChip(
+                          label: preset.label,
+                          selected:
+                              preset.matches(_activeFilters, _activeRadio),
+                          color: AppTheme.accent,
+                          onTap: () => apply(() => setState(() {
+                                _activeFilters = preset.resolve();
+                                _activeRadio = preset.radio;
+                              })),
+                        ),
+                    ],
+                  ),
+                ),
+                if (sourceNodes.isNotEmpty)
+                  CommandSheetGroup(
+                    label: 'SOURCE',
+                    child: Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: [
+                        for (final (id, label) in <(String?, String)>[
+                          (null, 'ALL'),
+                          ('', 'LOCAL'),
+                          ...sourceNodes.map((n) => (n, labelForNode(n))),
+                        ])
+                          CommandChip(
+                            label: label,
+                            selected: _selectedNode == id,
+                            color: AppTheme.warning,
+                            onTap: () => apply(
+                                () => setState(() => _selectedNode = id)),
+                          ),
+                      ],
+                    ),
+                  ),
+                CommandSheetGroup(
+                  label: 'ENGINES',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => apply(() => setState(() {
+                                  _activeFilters = Engine.values.toSet();
+                                  _activeRadio = null;
+                                })),
+                            child: Text('ALL',
+                                style: barLabelStyle(ctx, AppTheme.accent)),
+                          ),
+                          TextButton(
+                            onPressed: () => apply(() => setState(() {
+                                  _activeFilters = <Engine>{};
+                                  _activeRadio = null;
+                                })),
+                            child: Text('NONE',
+                                style: barLabelStyle(ctx, t.textDim)),
+                          ),
+                        ],
+                      ),
+                      for (final engine in Engine.values)
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          activeColor: engine.color,
+                          value: _activeFilters.contains(engine),
+                          onChanged: (v) => apply(() => setState(() {
+                                final next = Set<Engine>.from(_activeFilters);
+                                if (v ?? false) {
+                                  next.add(engine);
+                                } else {
+                                  next.remove(engine);
+                                }
+                                _activeFilters = next;
+                                _activeRadio = null;
+                              })),
+                          title: Row(
+                            children: [
+                              Icon(engine.icon,
+                                  size: barIconSize(ctx), color: engine.color),
+                              SizedBox(width: gap),
+                              Flexible(
+                                child: Text(
+                                  engine.label.toUpperCase(),
+                                  style: barLabelStyle(ctx, t.textPrimary)
+                                      .copyWith(letterSpacing: 1),
+                                ),
+                              ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            engine.description,
+                            style: (Theme.of(ctx).textTheme.bodySmall ??
+                                    const TextStyle())
+                                .copyWith(color: t.textDim),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _openSortSheet() {
+    return showCommandSheet<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => CommandSheet(
+          title: 'SORT',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              CommandSheetGroup(
+                label: 'ORDER BY',
+                child: Wrap(
+                  spacing: barGap(ctx),
+                  runSpacing: barGap(ctx),
+                  children: [
+                    for (final m in FeedMetric.values)
+                      CommandChip(
+                        label: m.label,
+                        selected: _sortMetric == m,
+                        color: AppTheme.accent,
+                        onTap: () {
+                          setState(() {
+                            if (_sortMetric == m) {
+                              _sortAscending = !_sortAscending;
+                            } else {
+                              _sortMetric = m;
+                              _sortAscending = false;
+                            }
+                          });
+                          setSheet(() {});
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              CommandSheetTile(
+                icon: _sortAscending
+                    ? Icons.arrow_upward
+                    : Icons.arrow_downward,
+                label: _sortAscending ? 'ASCENDING' : 'DESCENDING',
+                subtitle: _sortDirectionHint,
+                color: AppTheme.accent,
+                onTap: () {
+                  setState(() => _sortAscending = !_sortAscending);
+                  setSheet(() {});
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String get _sortDirectionHint => switch ((_sortMetric, _sortAscending)) {
+        (FeedMetric.time, true) => 'Oldest first',
+        (FeedMetric.time, false) => 'Newest first',
+        (FeedMetric.rssi, true) => 'Weakest signal first',
+        (FeedMetric.rssi, false) => 'Strongest signal first',
+        (FeedMetric.count, true) => 'Fewest hits first',
+        (FeedMetric.count, false) => 'Most hits first',
+        (FeedMetric.name, true) => 'A → Z',
+        (FeedMetric.name, false) => 'Z → A',
+        (FeedMetric.channel, true) => 'Lowest channel first',
+        (FeedMetric.channel, false) => 'Highest channel first',
+      };
+
+  Future<void> _openActionSheet(List<Detection> filtered, AppState state) {
+    return showCommandSheet<void>(
+      context: context,
+      builder: (ctx) => CommandSheet(
+        title: 'ACTIONS',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CommandSheetTile(
+              icon: _showStats ? Icons.analytics : Icons.analytics_outlined,
+              label: _showStats ? 'HIDE STATS' : 'SHOW STATS',
+              subtitle: 'Summary header above the feed',
+              color: _showStats ? AppTheme.accent : null,
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() => _showStats = !_showStats);
+              },
+            ),
+            CommandSheetTile(
+              icon: _searchOpen ? Icons.search_off : Icons.search,
+              label: _searchOpen ? 'CLOSE SEARCH' : 'SEARCH',
+              subtitle: 'MAC, name, method, node',
+              onTap: () {
+                Navigator.pop(ctx);
+                _toggleSearch();
+              },
+            ),
+            const Divider(height: 1),
+            CommandSheetTile(
+              icon: Icons.ios_share,
+              label: 'EXPORT CSV',
+              subtitle: '${filtered.length} shown',
+              onTap: filtered.isEmpty
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      _exportCsv(context, filtered);
+                    },
+            ),
+            CommandSheetTile(
+              icon: Icons.delete_sweep,
+              label: 'CLEAR FEED',
+              subtitle: '${state.recentDetections.length} detections held',
+              color: AppTheme.error,
+              onTap: state.recentDetections.isEmpty
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      _clearAll(context);
+                    },
             ),
           ],
         ),
@@ -283,41 +648,5 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
     }
-  }
-}
-
-class _HeaderIconButton extends StatelessWidget {
-  const _HeaderIconButton({
-    required this.icon,
-    required this.active,
-    required this.enabled,
-    required this.onTap,
-  });
-  final IconData icon;
-  final bool active;
-  final bool enabled;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    final color = !enabled
-        ? t.textDim.withValues(alpha: 0.4)
-        : active
-            ? AppTheme.accent
-            : t.textSecondary;
-    return Material(
-      color: active ? AppTheme.accent.withValues(alpha: 0.14) : Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: SizedBox(
-          width: 36,
-          height: 36,
-          child: Icon(icon, size: 18, color: color),
-        ),
-      ),
-    );
   }
 }
