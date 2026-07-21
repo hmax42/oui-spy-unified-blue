@@ -24,6 +24,7 @@ import 'package:oui_spy/core/ignore_list_state.dart';
 import 'package:oui_spy/core/watchlist_state.dart';
 import 'package:oui_spy/core/export/wigle_csv_import.dart';
 import 'package:oui_spy/features/config/widgets/config_widgets.dart';
+import 'package:oui_spy/features/config/widgets/config_nav.dart';
 import 'package:oui_spy/features/config/ota_progress_stepper.dart';
 import 'package:oui_spy/features/notifications/notification_settings_screen.dart';
 import 'package:path_provider/path_provider.dart';
@@ -48,10 +49,6 @@ class DeviceConfigScreen extends ConsumerStatefulWidget {
 class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  static const _tabLabels = [
-    'APP', 'WARDRIVE', 'IGNORE', 'DETECTIONS',
-    'HARDWARE', 'ALERTS', 'MESH', 'FIRMWARE',
-  ];
 
   bool _flockExtendedOui = false;
   bool _offlineScanEnabled = false;
@@ -76,7 +73,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 8, vsync: this);
+    _tabController = TabController(length: kConfigSections.length, vsync: this);
     _offlineGpsTag =
         ref.read(sharedPreferencesProvider).getBool('offlineGpsTagEnabled') ?? false;
     _readDeviceConfig();
@@ -187,53 +184,43 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
         onTap: () => FocusScope.of(context).unfocus(),
         behavior: HitTestBehavior.translucent,
         child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Row(
-                children: [
-                  Text(
-                    'CONFIG',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          letterSpacing: 3,
-                          color: t.textDim,
-                        ),
-                  ),
-                  const Spacer(),
-                  if (_loading)
-                    const SizedBox(
-                      width: 12, height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5, color: AppTheme.accent,
-                      ),
-                    ),
-                ],
+        bottom: false,
+        child: ConfigNav(
+          controller: _tabController,
+          child: Column(
+            children: [
+              _ConfigTitleBar(controller: _tabController, loading: _loading),
+              const Divider(height: 1),
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _section(_buildAppTab()),
+                    _section(const _WardriveConfigTab()),
+                    const _DetectionsTab(),
+                    _section(const _PcapInlineSection(standalone: true)),
+                    _section(const _IgnoreListTab()),
+                    _section(_buildAlertsTab()),
+                    _section(_buildHardwareTab()),
+                    _section(_buildMeshTab()),
+                    _section(_buildFirmwareTab()),
+                  ],
+                ),
               ),
-            ),
-            _ConfigTabBar(controller: _tabController, labels: _tabLabels),
-            const Divider(height: 1),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildAppTab(),
-                  const _WardriveConfigTab(),
-                  const _IgnoreListTab(),
-                  const _DetectionsTab(),
-                  _buildHardwareTab(),
-                  _buildAlertsTab(),
-                  _buildMeshTab(),
-                  _buildFirmwareTab(),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
         ),
       ),
     );
   }
+
+  Widget _section(Widget body) => Column(
+        children: [
+          Expanded(child: body),
+          const ConfigBottomBar(),
+        ],
+      );
 
   Widget _buildAppTab() {
     final themeMode = ref.watch(themeModeProvider);
@@ -1303,6 +1290,26 @@ class _ChannelRangeSlider extends ConsumerWidget {
           onDown: () => ref.read(wardriveProvider).channelEnd = wd.channelEnd - 1,
           onUp: () => ref.read(wardriveProvider).channelEnd = wd.channelEnd + 1,
         ),
+        if (ref.watch(bleManagerProvider).board == 'xiao_c5')
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Row(
+              children: [
+                const Icon(Icons.cell_tower, size: 18),
+                const SizedBox(width: 10),
+                const Expanded(child: Text('2.4 GHz scan')),
+                ToggleButtons(
+                  borderRadius: BorderRadius.circular(6),
+                  constraints:
+                      const BoxConstraints(minHeight: 32, minWidth: 60),
+                  isSelected: [wd.wardrive24Mode == 0, wd.wardrive24Mode == 1],
+                  onPressed: (i) =>
+                      ref.read(wardriveProvider).wardrive24Mode = i,
+                  children: const [Text('All'), Text('1·6·11')],
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -2295,78 +2302,57 @@ class _WdgwarsStatsCard extends StatelessWidget {
   }
 }
 
-class _ConfigTabBar extends StatelessWidget {
-  const _ConfigTabBar({required this.controller, required this.labels});
+class _ConfigTitleBar extends StatelessWidget {
+  const _ConfigTitleBar({required this.controller, required this.loading});
   final TabController controller;
-  final List<String> labels;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final gap = configGap(context);
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
+        final index = controller.index.clamp(0, kConfigSections.length - 1);
         return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            alignment: WrapAlignment.center,
+          padding: EdgeInsets.fromLTRB(gap * 2, gap * 1.5, gap * 2, gap * 1.5),
+          child: Row(
             children: [
-              for (int i = 0; i < labels.length; i++)
-                _TabPill(
-                  label: labels[i],
-                  selected: controller.index == i,
-                  onTap: () => controller.animateTo(i),
+              Text(
+                'CONFIG',
+                style: configLabelStyle(context, t.textDim, bold: false)
+                    .copyWith(letterSpacing: 3),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: gap),
+                child: Text(
+                  '·',
+                  style: configLabelStyle(context, t.textDim, bold: false),
+                ),
+              ),
+              Flexible(
+                child: Text(
+                  kConfigSections[index].label,
+                  softWrap: false,
+                  overflow: TextOverflow.fade,
+                  style: configLabelStyle(context, t.textPrimary)
+                      .copyWith(letterSpacing: 3),
+                ),
+              ),
+              const Spacer(),
+              if (loading)
+                SizedBox(
+                  width: configIconSize(context) * 0.8,
+                  height: configIconSize(context) * 0.8,
+                  child: const CircularProgressIndicator(
+                    strokeWidth: 1.5, color: AppTheme.accent,
+                  ),
                 ),
             ],
           ),
         );
       },
-    );
-  }
-}
-
-class _TabPill extends StatelessWidget {
-  const _TabPill({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppTheme.accent.withValues(alpha: 0.15)
-              : t.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected
-                ? AppTheme.accent
-                : t.border,
-            width: selected ? 1.2 : 1,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? AppTheme.accent : t.textDim,
-            fontSize: 10,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-            letterSpacing: 1,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -3367,7 +3353,6 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
   _RadioSel _radioFilter = _RadioSel.all;
   String? _methodFilter; // null = all, else a raw detectionMethod string
   bool _showMap = false;
-  bool _pcapExpanded = true;
   bool _searchOpen = false;
   final _searchCtrl = TextEditingController();
   String _search = '';
@@ -3433,7 +3418,6 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
   void initState() {
     super.initState();
     _load();
-    _loadPcapExpanded();
   }
 
   @override
@@ -3441,14 +3425,6 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
     _searchCtrl.dispose();
     _mapController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadPcapExpanded() async {
-    final prefs = await SharedPreferences.getInstance();
-    final v = prefs.getBool('pcaps_panel_expanded');
-    if (v != null && mounted && v != _pcapExpanded) {
-      setState(() => _pcapExpanded = v);
-    }
   }
 
   Future<void> _load() async {
@@ -3610,17 +3586,6 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
     );
   }
 
-  Future<void> _pickRadio() => _showPicker<_RadioSel>(
-        title: 'RADIO',
-        current: _radioFilter,
-        options: const [
-          (_RadioSel.all, 'ALL'),
-          (_RadioSel.ble, 'BLE'),
-          (_RadioSel.wifi, 'WIFI'),
-        ],
-        onSelected: (v) => setState(() => _radioFilter = v),
-      );
-
   Future<void> _pickMethod() {
     final methods = _detections
         .map((d) => (d['detectionMethod'] as String?) ?? '')
@@ -3704,266 +3669,496 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
     }
   }
 
+  int get _activeFilterCount {
+    var n = 0;
+    if (_engineFilter != null) n++;
+    if (_noGpsOnly) n++;
+    if (_radioFilter != _RadioSel.all) n++;
+    if (_methodFilter != null) n++;
+    return n;
+  }
+
+  int _engineCount(String key) => switch (key) {
+        'flock' => _detections.where((d) {
+            final e = d['engine'] as String;
+            return e == 'flockBle' || e == 'flockWifi';
+          }).length,
+        'detector' => _detections.where((d) => d['engine'] == 'detector').length,
+        'drone' => _detections.where((d) => d['engine'] == 'skySpy').length,
+        _ => _detections.length,
+      };
+
+  void _clearFilters() => setState(() {
+        _engineFilter = null;
+        _noGpsOnly = false;
+        _radioFilter = _RadioSel.all;
+        _methodFilter = null;
+      });
+
+  void _toggleSearch() => setState(() {
+        _searchOpen = !_searchOpen;
+        if (!_searchOpen) {
+          _searchCtrl.clear();
+          _search = '';
+        }
+      });
+
+  Future<void> _openFilterSheet() {
+    return showConfigSheet<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          void apply(VoidCallback fn) {
+            fn();
+            setSheet(() {});
+          }
+
+          final noGpsCount = _detections
+              .where((d) => d['latitude'] == null || d['longitude'] == null)
+              .length;
+
+          return ConfigSheet(
+            title: 'FILTER',
+            trailing: _activeFilterCount == 0
+                ? null
+                : TextButton(
+                    onPressed: () => apply(_clearFilters),
+                    child: Text(
+                      'RESET',
+                      style: configLabelStyle(ctx, AppTheme.accent),
+                    ),
+                  ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ConfigSheetGroup(
+                  label: 'SOURCE',
+                  child: Wrap(
+                    spacing: configGap(ctx),
+                    runSpacing: configGap(ctx),
+                    children: [
+                      _FilterChip(
+                        label: 'ALL',
+                        count: _detections.length,
+                        selected: _engineFilter == null,
+                        color: AppTheme.accent,
+                        onTap: () =>
+                            apply(() => setState(() => _engineFilter = null)),
+                      ),
+                      _FilterChip(
+                        label: 'FLOCK',
+                        count: _engineCount('flock'),
+                        selected: _engineFilter == 'flock',
+                        color: AppTheme.flockBle,
+                        onTap: () => apply(() => setState(() => _engineFilter =
+                            _engineFilter == 'flock' ? null : 'flock')),
+                      ),
+                      _FilterChip(
+                        label: 'DETECT',
+                        count: _engineCount('detector'),
+                        selected: _engineFilter == 'detector',
+                        color: AppTheme.detector,
+                        onTap: () => apply(() => setState(() => _engineFilter =
+                            _engineFilter == 'detector' ? null : 'detector')),
+                      ),
+                      _FilterChip(
+                        label: 'DRONES',
+                        count: _engineCount('drone'),
+                        selected: _engineFilter == 'drone',
+                        color: AppTheme.skySpy,
+                        onTap: () => apply(() => setState(() => _engineFilter =
+                            _engineFilter == 'drone' ? null : 'drone')),
+                      ),
+                    ],
+                  ),
+                ),
+                ConfigSheetGroup(
+                  label: 'RADIO',
+                  child: Wrap(
+                    spacing: configGap(ctx),
+                    runSpacing: configGap(ctx),
+                    children: [
+                      for (final (sel, label) in const [
+                        (_RadioSel.all, 'ALL'),
+                        (_RadioSel.ble, 'BLE'),
+                        (_RadioSel.wifi, 'WIFI'),
+                      ])
+                        _FilterChip(
+                          label: label,
+                          selected: _radioFilter == sel,
+                          color: AppTheme.accent,
+                          onTap: () => apply(
+                              () => setState(() => _radioFilter = sel)),
+                        ),
+                    ],
+                  ),
+                ),
+                ConfigSheetGroup(
+                  label: 'LOCATION',
+                  child: Wrap(
+                    spacing: configGap(ctx),
+                    runSpacing: configGap(ctx),
+                    children: [
+                      _FilterChip(
+                        label: 'ANY',
+                        selected: !_noGpsOnly,
+                        color: AppTheme.accent,
+                        onTap: () =>
+                            apply(() => setState(() => _noGpsOnly = false)),
+                      ),
+                      _FilterChip(
+                        label: 'NO GPS ONLY',
+                        count: noGpsCount,
+                        selected: _noGpsOnly,
+                        color: AppTheme.gpsNone,
+                        onTap: () =>
+                            apply(() => setState(() => _noGpsOnly = true)),
+                      ),
+                    ],
+                  ),
+                ),
+                ConfigSheetGroup(
+                  label: 'METHOD',
+                  child: _DetDropdown(
+                    icon: Icons.tune,
+                    label: 'METHOD',
+                    value: _methodFilter == null
+                        ? 'ALL'
+                        : _detMethodLabel(_methodFilter!),
+                    active: _methodFilter != null,
+                    onTap: () async {
+                      await _pickMethod();
+                      setSheet(() {});
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _openSortSheet() {
+    return showConfigSheet<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => ConfigSheet(
+          title: 'SORT',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConfigSheetGroup(
+                label: 'ORDER BY',
+                child: Wrap(
+                  spacing: configGap(ctx),
+                  runSpacing: configGap(ctx),
+                  children: [
+                    for (final s in _DetSort.values)
+                      _SortBtn(
+                        label: s.label,
+                        active: _sort == s,
+                        ascending: _ascending,
+                        onTap: () {
+                          _toggleSort(s);
+                          setSheet(() {});
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              ConfigSheetTile(
+                icon: _ascending ? Icons.arrow_upward : Icons.arrow_downward,
+                label: _ascending ? 'ASCENDING' : 'DESCENDING',
+                subtitle: _sortDirectionHint,
+                color: AppTheme.accent,
+                onTap: () {
+                  setState(() => _ascending = !_ascending);
+                  setSheet(() {});
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String get _sortDirectionHint => switch ((_sort, _ascending)) {
+        (_DetSort.time, true) => 'Oldest first',
+        (_DetSort.time, false) => 'Newest first',
+        (_DetSort.rssi, true) => 'Weakest signal first',
+        (_DetSort.rssi, false) => 'Strongest signal first',
+        (_DetSort.mac, true) => 'A → Z',
+        (_DetSort.mac, false) => 'Z → A',
+      };
+
+  Future<void> _openActionSheet() {
+    final items = _filtered;
+    return showConfigSheet<void>(
+      context: context,
+      builder: (ctx) => ConfigSheet(
+        title: 'ACTIONS',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConfigSheetTile(
+              icon: _showMap ? Icons.view_list : Icons.map,
+              label: _showMap ? 'LIST VIEW' : 'MAP VIEW',
+              subtitle: _showMap
+                  ? 'Back to the detection list'
+                  : 'Plot detections with GPS',
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() => _showMap = !_showMap);
+              },
+            ),
+            ConfigSheetTile(
+              icon: _searchOpen ? Icons.search_off : Icons.search,
+              label: _searchOpen ? 'CLOSE SEARCH' : 'SEARCH',
+              subtitle: 'MAC, name, SSID, method',
+              onTap: () {
+                Navigator.pop(ctx);
+                _toggleSearch();
+              },
+            ),
+            const Divider(height: 1),
+            ConfigSheetTile(
+              icon: Icons.ios_share,
+              label: 'EXPORT CSV',
+              subtitle: '${items.length} shown',
+              onTap: items.isEmpty
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      _exportCsv(context, items);
+                    },
+            ),
+            ConfigSheetTile(
+              icon: Icons.refresh,
+              label: 'RESCAN & RECLASSIFY',
+              subtitle: 'Re-run OUI matching over stored sessions',
+              color: AppTheme.detector,
+              onTap: _rescanning
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      _rescan();
+                    },
+            ),
+            ConfigSheetTile(
+              icon: Icons.delete_sweep,
+              label: 'CLEAR ALL',
+              subtitle: '${_detections.length} detections in database',
+              color: AppTheme.error,
+              onTap: _detections.isEmpty
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      _clearAll();
+                    },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
+    final items = _loading ? const <Map<String, dynamic>>[] : _filtered;
+    final hasQuery = _search.trim().isNotEmpty;
 
+    return Column(
+      children: [
+        if (_searchOpen) _buildSearchField(t),
+        if (_activeFilterCount > 0 || hasQuery) _buildFilterStrip(t, items.length),
+        const Divider(height: 1),
+        Expanded(child: _buildBody(t, items)),
+        ConfigBottomBar(
+          actions: [
+            ConfigBarAction(
+              icon: Icons.filter_alt,
+              label: 'FILTER',
+              badge: _activeFilterCount,
+              active: _activeFilterCount > 0,
+              onTap: _detections.isEmpty ? null : _openFilterSheet,
+            ),
+            ConfigBarAction(
+              icon: _ascending ? Icons.arrow_upward : Icons.arrow_downward,
+              label: _sort.label,
+              active: true,
+              onTap: _detections.isEmpty ? null : _openSortSheet,
+            ),
+            ConfigBarAction(
+              icon: _rescanning ? Icons.hourglass_top : Icons.more_horiz,
+              label: 'MORE',
+              onTap: _openActionSheet,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchField(ResolvedTheme t) {
+    final gap = configGap(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(gap * 1.5, gap, gap * 1.5, gap),
+      child: TextField(
+        controller: _searchCtrl,
+        autofocus: true,
+        textInputAction: TextInputAction.search,
+        onChanged: (v) => setState(() => _search = v),
+        style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+            .copyWith(color: t.textPrimary),
+        decoration: InputDecoration(
+          hintText: 'MAC, name, SSID, method…',
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: gap * 1.5,
+            vertical: gap * 1.5,
+          ),
+          prefixIcon: Icon(Icons.search, size: configIconSize(context)),
+          suffixIcon: IconButton(
+            icon: Icon(Icons.close, size: configIconSize(context)),
+            onPressed: _toggleSearch,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(gap),
+            borderSide: BorderSide(color: t.border),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterStrip(ResolvedTheme t, int shown) {
+    final gap = configGap(context);
+    final chips = <Widget>[
+      if (_engineFilter != null)
+        _ActiveFilterChip(
+          label: switch (_engineFilter!) {
+            'flock' => 'FLOCK',
+            'detector' => 'DETECT',
+            'drone' => 'DRONES',
+            _ => _engineFilter!.toUpperCase(),
+          },
+          color: switch (_engineFilter!) {
+            'flock' => AppTheme.flockBle,
+            'detector' => AppTheme.detector,
+            'drone' => AppTheme.skySpy,
+            _ => AppTheme.accent,
+          },
+          onClear: () => setState(() => _engineFilter = null),
+        ),
+      if (_radioFilter != _RadioSel.all)
+        _ActiveFilterChip(
+          label: _radioFilter == _RadioSel.ble ? 'BLE' : 'WIFI',
+          color: AppTheme.accent,
+          onClear: () => setState(() => _radioFilter = _RadioSel.all),
+        ),
+      if (_methodFilter != null)
+        _ActiveFilterChip(
+          label: _detMethodLabel(_methodFilter!),
+          color: AppTheme.accent,
+          onClear: () => setState(() => _methodFilter = null),
+        ),
+      if (_noGpsOnly)
+        _ActiveFilterChip(
+          label: 'NO GPS',
+          color: AppTheme.gpsNone,
+          onClear: () => setState(() => _noGpsOnly = false),
+        ),
+      if (_search.trim().isNotEmpty)
+        _ActiveFilterChip(
+          label: '"${_search.trim()}"',
+          color: AppTheme.accent,
+          onClear: _toggleSearch,
+        ),
+    ];
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(gap * 1.5, gap * 0.5, gap * 1.5, gap * 0.5),
+      child: Row(
+        children: [
+          Text(
+            '$shown / ${_detections.length}',
+            style: configLabelStyle(context, t.textDim, bold: false),
+          ),
+          SizedBox(width: gap),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                children: [
+                  for (final c in chips) ...[
+                    SizedBox(width: gap * 0.75),
+                    c,
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(ResolvedTheme t, List<Map<String, dynamic>> items) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(
-        color: AppTheme.accent, strokeWidth: 2));
+      return const Center(
+        child: CircularProgressIndicator(
+          color: AppTheme.accent, strokeWidth: 2),
+      );
     }
 
     if (_detections.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.videocam_off, size: 36, color: t.textDim),
-            const SizedBox(height: 12),
-            Text('NO DETECTIONS', style: TextStyle(
-              color: t.textDim, fontSize: 12,
-              fontWeight: FontWeight.w700, letterSpacing: 2,
-            )),
-            const SizedBox(height: 6),
-            Text(
-              'Run a wardrive with Flock, Detector, or Sky Spy engines to see detections here.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: t.textDim, fontSize: 11),
-            ),
-          ],
+      return _EmptyState(
+        icon: Icons.videocam_off,
+        title: 'NO DETECTIONS',
+        message:
+            'Run a wardrive with Flock, Detector, or Sky Spy engines to see detections here.',
+      );
+    }
+
+    if (items.isEmpty) {
+      return _EmptyState(
+        icon: Icons.filter_alt_off,
+        title: 'NO MATCHES',
+        message:
+            '${_detections.length} detections stored, none match the current filters.',
+        action: TextButton(
+          onPressed: () {
+            _clearFilters();
+            if (_search.trim().isNotEmpty) _toggleSearch();
+          },
+          child: Text(
+            'CLEAR FILTERS',
+            style: configLabelStyle(context, AppTheme.accent),
+          ),
         ),
       );
     }
 
-    final items = _filtered;
-    final flockCount = _detections.where((d) {
-      final e = d['engine'] as String;
-      return e == 'flockBle' || e == 'flockWifi';
-    }).length;
-    final detectorCount = _detections.where((d) => d['engine'] == 'detector').length;
-    final droneCount = _detections.where((d) => d['engine'] == 'skySpy').length;
-    final noGpsCount = _detections
-        .where((d) => d['latitude'] == null || d['longitude'] == null)
-        .length;
+    if (_showMap) return _buildMapView(items, t);
 
-    return Column(
-      children: [
-        // Filter chips
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              _FilterChip(
-                label: 'ALL (${_detections.length})',
-                selected: _engineFilter == null && !_noGpsOnly,
-                color: AppTheme.accent,
-                onTap: () => setState(() {
-                  _engineFilter = null;
-                  _noGpsOnly = false;
-                }),
-              ),
-              _FilterChip(
-                label: 'FLOCK ($flockCount)',
-                selected: _engineFilter == 'flock',
-                color: AppTheme.flockBle,
-                onTap: () => setState(() =>
-                    _engineFilter = _engineFilter == 'flock' ? null : 'flock'),
-              ),
-              _FilterChip(
-                label: 'DETECT ($detectorCount)',
-                selected: _engineFilter == 'detector',
-                color: AppTheme.detector,
-                onTap: () => setState(() =>
-                    _engineFilter = _engineFilter == 'detector' ? null : 'detector'),
-              ),
-              _FilterChip(
-                label: 'DRONES ($droneCount)',
-                selected: _engineFilter == 'drone',
-                color: AppTheme.skySpy,
-                onTap: () => setState(() =>
-                    _engineFilter = _engineFilter == 'drone' ? null : 'drone'),
-              ),
-              _FilterChip(
-                label: 'NO GPS ($noGpsCount)',
-                selected: _noGpsOnly,
-                color: AppTheme.gpsNone,
-                onTap: () => setState(() => _noGpsOnly = !_noGpsOnly),
-              ),
-            ],
-          ),
-        ),
-        // Radio + method filter dropdowns
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: _DetDropdown(
-                  icon: Icons.cell_tower,
-                  label: 'RADIO',
-                  value: switch (_radioFilter) {
-                    _RadioSel.all => 'ALL',
-                    _RadioSel.ble => 'BLE',
-                    _RadioSel.wifi => 'WIFI',
-                  },
-                  active: _radioFilter != _RadioSel.all,
-                  onTap: _pickRadio,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _DetDropdown(
-                  icon: Icons.tune,
-                  label: 'METHOD',
-                  value: _methodFilter == null
-                      ? 'ALL'
-                      : _detMethodLabel(_methodFilter!),
-                  active: _methodFilter != null,
-                  onTap: _pickMethod,
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Sort buttons
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Row(
-            children: [
-              Text('SORT', style: TextStyle(
-                color: t.textSecondary, fontSize: 11,
-                fontWeight: FontWeight.w700, letterSpacing: 1,
-              )),
-              const SizedBox(width: 8),
-              for (final s in _DetSort.values) ...[
-                _SortBtn(
-                  label: s.label,
-                  active: _sort == s,
-                  ascending: _ascending,
-                  onTap: () => _toggleSort(s),
-                ),
-                const SizedBox(width: 6),
-              ],
-              const Spacer(),
-              GestureDetector(
-                onTap: items.isEmpty ? null : () => _exportCsv(context, items),
-                child: Icon(
-                  Icons.ios_share,
-                  size: 16,
-                  color: items.isEmpty
-                      ? t.textDim.withValues(alpha: 0.4)
-                      : AppTheme.accent,
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: () => setState(() => _showMap = !_showMap),
-                child: Icon(
-                  _showMap ? Icons.list : Icons.map,
-                  size: 16,
-                  color: _showMap ? AppTheme.accent : t.textDim,
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: () => setState(() {
-                  _searchOpen = !_searchOpen;
-                  if (!_searchOpen) {
-                    _searchCtrl.clear();
-                    _search = '';
-                  }
-                }),
-                child: Icon(
-                  _searchOpen ? Icons.search_off : Icons.search,
-                  size: 16,
-                  color: (_searchOpen || _search.isNotEmpty)
-                      ? AppTheme.accent
-                      : t.textDim,
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: _rescanning ? null : _rescan,
-                child: _rescanning
-                    ? const SizedBox(
-                        width: 14, height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.5, color: AppTheme.accent,
-                        ),
-                      )
-                    : Icon(Icons.refresh, size: 16, color: AppTheme.detector),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: _detections.isEmpty ? null : _clearAll,
-                child: Icon(
-                  Icons.delete_sweep,
-                  size: 16,
-                  color: _detections.isEmpty
-                      ? t.textDim.withValues(alpha: 0.4)
-                      : AppTheme.error,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (_searchOpen)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-            child: SizedBox(
-              height: 32,
-              child: TextField(
-                controller: _searchCtrl,
-                autofocus: true,
-                onChanged: (v) => setState(() => _search = v),
-                style: TextStyle(fontSize: 12, color: t.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'MAC, name, SSID, method…',
-                  prefixIcon: const Icon(Icons.search, size: 16),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(6),
-                    borderSide: BorderSide(color: t.border),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        const Divider(height: 1),
-        Expanded(
-          flex: 3,
-          child: _showMap
-              ? _buildMapView(items, t)
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  itemCount: items.length,
-                  itemBuilder: (_, i) => _DetectionRow(
-                    data: items[i],
-                    engineColor: _engineColor(items[i]['engine'] as String),
-                    engineLabel: _engineLabel(items[i]['engine'] as String),
-                    onShowMap: () => _showOnMap(items[i]),
-                    onFoxhunt: () => _startFoxhunt(items[i]),
-                    onDelete: _load,
-                  ),
-                ),
-        ),
-        const Divider(height: 1, thickness: 1),
-        if (_pcapExpanded)
-          Expanded(
-            flex: 2,
-            child: _PcapInlineSection(
-              onExpandedChanged: (v) => setState(() => _pcapExpanded = v),
-            ),
-          )
-        else
-          _PcapInlineSection(
-            onExpandedChanged: (v) => setState(() => _pcapExpanded = v),
-          ),
-      ],
+    final gap = configGap(context);
+    return ListView.builder(
+      padding: EdgeInsets.symmetric(horizontal: gap * 1.5, vertical: gap * 0.5),
+      itemCount: items.length,
+      itemBuilder: (_, i) => _DetectionRow(
+        data: items[i],
+        engineColor: _engineColor(items[i]['engine'] as String),
+        engineLabel: _engineLabel(items[i]['engine'] as String),
+        onShowMap: () => _showOnMap(items[i]),
+        onFoxhunt: () => _startFoxhunt(items[i]),
+        onDelete: _load,
+      ),
     );
   }
 
@@ -4270,33 +4465,155 @@ class _FilterChip extends StatelessWidget {
     required this.selected,
     required this.color,
     required this.onTap,
+    this.count,
   });
   final String label;
   final bool selected;
   final Color color;
   final VoidCallback onTap;
+  final int? count;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? color.withValues(alpha: 0.22)
-              : color.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(
-            color: selected ? color : color.withValues(alpha: 0.55),
-            width: selected ? 1.6 : 1.0,
+    final gap = configGap(context);
+    final radius = BorderRadius.circular(kMinInteractiveDimension);
+    return Material(
+      color: selected
+          ? color.withValues(alpha: 0.22)
+          : color.withValues(alpha: 0.06),
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Container(
+          constraints:
+              const BoxConstraints(minHeight: kMinInteractiveDimension * 0.8),
+          padding: EdgeInsets.symmetric(
+            horizontal: gap * 1.75,
+            vertical: gap,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(
+              color: selected ? color : color.withValues(alpha: 0.55),
+              width: selected ? 1.6 : 1.0,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: configLabelStyle(context, color)),
+              if (count != null) ...[
+                SizedBox(width: gap * 0.75),
+                Text(
+                  '$count',
+                  style: configLabelStyle(
+                    context,
+                    color.withValues(alpha: 0.65),
+                    bold: false,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
-        child: Text(label, style: TextStyle(
-          color: color,
-          fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.3,
-        )),
+      ),
+    );
+  }
+}
+
+class _ActiveFilterChip extends StatelessWidget {
+  const _ActiveFilterChip({
+    required this.label,
+    required this.color,
+    required this.onClear,
+  });
+  final String label;
+  final Color color;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final gap = configGap(context);
+    final radius = BorderRadius.circular(kMinInteractiveDimension);
+    return Material(
+      color: color.withValues(alpha: 0.18),
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onClear,
+        borderRadius: radius,
+        child: Container(
+          constraints:
+              const BoxConstraints(minHeight: kMinInteractiveDimension * 0.65),
+          padding: EdgeInsets.fromLTRB(gap * 1.5, gap * 0.5, gap, gap * 0.5),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(color: color.withValues(alpha: 0.7)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: configLabelStyle(context, color),
+                ),
+              ),
+              SizedBox(width: gap * 0.5),
+              Icon(Icons.close, size: configIconSize(context) * 0.8, color: color),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+  });
+  final IconData icon;
+  final String title;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final gap = configGap(context);
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: gap * 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: configIconSize(context) * 3, color: t.textDim),
+            SizedBox(height: gap * 1.5),
+            Text(
+              title,
+              style: configLabelStyle(context, t.textDim)
+                  .copyWith(letterSpacing: 2),
+            ),
+            SizedBox(height: gap * 0.75),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: (Theme.of(context).textTheme.bodySmall ??
+                      const TextStyle())
+                  .copyWith(color: t.textDim),
+            ),
+            if (action != null) ...[
+              SizedBox(height: gap),
+              action!,
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -4319,41 +4636,44 @@ class _DetDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: active
-              ? AppTheme.accent.withValues(alpha: 0.12)
-              : t.surfaceLight,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: active ? AppTheme.accent : t.border,
-            width: active ? 1.4 : 1.0,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 15, color: active ? AppTheme.accent : t.textDim),
-            const SizedBox(width: 7),
-            Text(label, style: TextStyle(
-              color: t.textDim, fontSize: 11,
-              fontWeight: FontWeight.w700, letterSpacing: 0.5,
-            )),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(value,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: active ? AppTheme.accent : t.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  )),
+    final gap = configGap(context);
+    final iconSize = configIconSize(context);
+    final radius = BorderRadius.circular(gap);
+    return Material(
+      color: active ? AppTheme.accent.withValues(alpha: 0.12) : t.surfaceLight,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Container(
+          constraints:
+              const BoxConstraints(minHeight: kMinInteractiveDimension),
+          padding: EdgeInsets.symmetric(horizontal: gap * 1.5, vertical: gap),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(
+              color: active ? AppTheme.accent : t.border,
+              width: active ? 1.4 : 1.0,
             ),
-            Icon(Icons.arrow_drop_down, size: 18, color: t.textDim),
-          ],
+          ),
+          child: Row(
+            children: [
+              Icon(icon,
+                  size: iconSize, color: active ? AppTheme.accent : t.textDim),
+              SizedBox(width: gap),
+              Text(label, style: configLabelStyle(context, t.textDim)),
+              SizedBox(width: gap),
+              Expanded(
+                child: Text(
+                  value,
+                  overflow: TextOverflow.ellipsis,
+                  style: configLabelStyle(
+                      context, active ? AppTheme.accent : t.textPrimary),
+                ),
+              ),
+              Icon(Icons.arrow_drop_down, size: iconSize, color: t.textDim),
+            ],
+          ),
         ),
       ),
     );
@@ -4375,36 +4695,43 @@ class _SortBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-        decoration: BoxDecoration(
-          color: active
-              ? AppTheme.accent.withValues(alpha: 0.18)
-              : t.surfaceLight,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: active ? AppTheme.accent : t.border,
-            width: active ? 1.6 : 1.0,
+    final gap = configGap(context);
+    final radius = BorderRadius.circular(gap);
+    return Material(
+      color: active ? AppTheme.accent.withValues(alpha: 0.18) : t.surfaceLight,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Container(
+          constraints:
+              const BoxConstraints(minHeight: kMinInteractiveDimension),
+          padding: EdgeInsets.symmetric(horizontal: gap * 2, vertical: gap),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(
+              color: active ? AppTheme.accent : t.border,
+              width: active ? 1.6 : 1.0,
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label, style: TextStyle(
-              color: active ? AppTheme.accent : t.textSecondary,
-              fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5,
-            )),
-            if (active) ...[
-              const SizedBox(width: 4),
-              Icon(
-                ascending ? Icons.arrow_upward : Icons.arrow_downward,
-                size: 13, color: AppTheme.accent,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: configLabelStyle(
+                    context, active ? AppTheme.accent : t.textSecondary),
               ),
+              if (active) ...[
+                SizedBox(width: gap * 0.75),
+                Icon(
+                  ascending ? Icons.arrow_upward : Icons.arrow_downward,
+                  size: configIconSize(context) * 0.9,
+                  color: AppTheme.accent,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -5862,8 +6189,8 @@ class _WifiEnableToggleState extends ConsumerState<_WifiEnableToggle> {
 }
 
 class _PcapInlineSection extends ConsumerStatefulWidget {
-  const _PcapInlineSection({this.onExpandedChanged});
-  final ValueChanged<bool>? onExpandedChanged;
+  const _PcapInlineSection({this.standalone = false});
+  final bool standalone;
   @override
   ConsumerState<_PcapInlineSection> createState() => _PcapInlineSectionState();
 }
@@ -5882,17 +6209,16 @@ class _PcapInlineSectionState extends ConsumerState<_PcapInlineSection> {
   }
 
   Future<void> _loadExpanded() async {
+    if (widget.standalone) return;
     final prefs = await SharedPreferences.getInstance();
     final v = prefs.getBool(_expandedPrefKey);
     if (v != null && mounted && v != _expanded) {
       setState(() => _expanded = v);
-      widget.onExpandedChanged?.call(_expanded);
     }
   }
 
   Future<void> _toggleExpanded() async {
     setState(() => _expanded = !_expanded);
-    widget.onExpandedChanged?.call(_expanded);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_expandedPrefKey, _expanded);
   }
@@ -6010,25 +6336,32 @@ class _PcapInlineSectionState extends ConsumerState<_PcapInlineSection> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         InkWell(
-          onTap: _toggleExpanded,
+          onTap: widget.standalone ? null : _toggleExpanded,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 8, 4),
+            padding: EdgeInsets.fromLTRB(
+              configGap(context) * 1.5,
+              configGap(context),
+              configGap(context),
+              configGap(context) * 0.5,
+            ),
             child: Row(
               children: [
-                Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
-                    size: 18, color: t.textDim),
-                const SizedBox(width: 4),
+                if (!widget.standalone) ...[
+                  Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
+                      size: configIconSize(context), color: t.textDim),
+                  SizedBox(width: configGap(context) * 0.5),
+                ],
                 Text("SAVED PCAPS",
-                    style: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 2, fontWeight: FontWeight.w700)),
+                    style: configLabelStyle(context, t.textDim)
+                        .copyWith(letterSpacing: 2)),
                 const Spacer(),
                 IconButton(
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.refresh, size: 18),
+                  icon: Icon(Icons.refresh, size: configIconSize(context)),
                   onPressed: _expanded ? _refresh : null,
                 ),
                 IconButton(
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.delete_sweep, size: 18, color: AppTheme.error),
+                  icon: Icon(Icons.delete_sweep,
+                      size: configIconSize(context), color: AppTheme.error),
                   tooltip: "Delete all",
                   onPressed: _expanded ? _deleteAll : null,
                 ),

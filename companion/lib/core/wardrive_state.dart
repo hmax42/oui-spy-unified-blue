@@ -163,6 +163,7 @@ class WardriveController extends ChangeNotifier {
     _bleScanInterval = p.getInt('wd_bleScanInterval') ?? 3000;
     _channelStart = p.getInt('wd_channelStart') ?? 1;
     _channelEnd = p.getInt('wd_channelEnd') ?? 14;
+    _wardrive24Mode = p.getInt('wd_wardrive24Mode') ?? 0;
     _wifiBand = WifiBand.values[
         (p.getInt('wd_wifiBand') ?? WifiBand.both.index)
             .clamp(0, WifiBand.values.length - 1)];
@@ -185,6 +186,7 @@ class WardriveController extends ChangeNotifier {
       await p.setInt('wd_wifiScanInterval', _wifiScanInterval);
       await p.setInt('wd_wifiDwellPerCh', _wifiDwellPerCh);
       await p.setInt('wd_channelEnd', _channelEnd);
+      await p.setInt('wd_wardrive24Mode', _wardrive24Mode);
       await p.setBool('wd_dwellFast_v6', true);
     }
     notifyListeners();
@@ -200,6 +202,7 @@ class WardriveController extends ChangeNotifier {
     p.setInt('wd_bleScanInterval', _bleScanInterval);
     p.setInt('wd_channelStart', _channelStart);
     p.setInt('wd_channelEnd', _channelEnd);
+    p.setInt('wd_wardrive24Mode', _wardrive24Mode);
     p.setInt('wd_wifiBand', _wifiBand.index);
     p.setInt('wd_radio', radioBitmask);
     p.setStringList('wd_targets', selectedTargets.map((t) => t.name).toList());
@@ -297,6 +300,10 @@ class WardriveController extends ChangeNotifier {
   int get channelEnd => _channelEnd;
   set channelEnd(int v) { _channelEnd = v.clamp(_channelStart, 14); notifyListeners(); _savePrefs(); _pushWardriveConfigLive(); }
 
+  int _wardrive24Mode = 0;
+  int get wardrive24Mode => _wardrive24Mode;
+  set wardrive24Mode(int v) { _wardrive24Mode = v.clamp(0, 1); notifyListeners(); _savePrefs(); _pushWardriveConfigLive(); }
+
   WifiBand _wifiBand = WifiBand.both;
   WifiBand get wifiBand => _wifiBand;
   int get wifiBandMask => switch (_wifiBand) {
@@ -314,6 +321,7 @@ class WardriveController extends ChangeNotifier {
         bleScanInterval & 0xFF, (bleScanInterval >> 8) & 0xFF,
         channelStart,
         channelEnd,
+        wardrive24Mode,
       ]);
 
   void _pushWardriveConfigLive() {
