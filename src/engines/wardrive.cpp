@@ -381,6 +381,7 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
                 fEvt.timestamp_ms = millis();
                 fEvt.method = fMethod;
                 fEvt.ext.flock.auth_mode = flockAuthCacheGet(fMac);
+                fEvt.ext.flock.sig_mask = FLOCK_SIG_OUI;
                 pushDetectionFromISR(&fEvt);
             }
         }
@@ -473,27 +474,40 @@ class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
             bool isRaven = false;
             const char* ravenFw = "";
             char tnSerial[20] = {0};
+            uint8_t sigMask = 0;
 
-            if (flockMatchOui(mac)) {
-                isFlock = true;
-                flockMethod = METHOD_OUI_MATCH;
-            }
-            if (!isFlock && name.length() > 0 && flockMatchNameStr(name.c_str())) {
-                isFlock = true;
-                flockMethod = METHOD_NAME_MATCH;
-            }
-            if (!isFlock && dev->haveManufacturerData()) {
+            if (dev->haveManufacturerData()) {
                 std::string md = dev->getManufacturerData();
                 if (flockMatchMfgPayload((const uint8_t*)md.data(), md.size(),
                                          tnSerial, sizeof(tnSerial))) {
-                    isFlock = true;
-                    flockMethod = METHOD_MFG_ID;
+                    sigMask |= FLOCK_SIG_MFG;
+                    if (tnSerial[0]) sigMask |= FLOCK_SIG_TN;
                 }
+            }
+            if (flockMatchOui(mac)) sigMask |= FLOCK_SIG_OUI;
+            if (name.length() > 0) {
+                if (flockMatchNameStr(name.c_str()))        sigMask |= FLOCK_SIG_NAME;
+                if (flockMatchBareSerialName(name.c_str())) sigMask |= FLOCK_SIG_SERIAL;
+            }
+
+            if (sigMask & FLOCK_SIG_OUI) {
+                isFlock = true;
+                flockMethod = METHOD_OUI_MATCH;
+            } else if (sigMask & FLOCK_SIG_NAME) {
+                isFlock = true;
+                flockMethod = METHOD_NAME_MATCH;
+            } else if ((sigMask & FLOCK_SIG_SERIAL) && (sigMask & FLOCK_SIG_MFG)) {
+                isFlock = true;
+                flockMethod = METHOD_NAME_MATCH;
+            } else if (sigMask & FLOCK_SIG_MFG) {
+                isFlock = true;
+                flockMethod = METHOD_MFG_ID;
             }
             if (!isFlock && flockMatchRavenUuid(dev, &ravenFw)) {
                 isFlock = true;
                 flockMethod = METHOD_RAVEN_UUID;
                 isRaven = true;
+                sigMask |= FLOCK_SIG_RAVEN_UUID;
             }
 
             if (isFlock) {
@@ -515,6 +529,7 @@ class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
                     strncpy(fEvt.ext.flock.name, name.c_str(),
                             sizeof(fEvt.ext.flock.name) - 1);
                 }
+                fEvt.ext.flock.sig_mask = sigMask;
                 pushDetection(&fEvt);
             }
         }

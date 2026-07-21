@@ -40,15 +40,38 @@ class Detection with _$Detection {
       _$DetectionFromJson(json);
 }
 
+/// Bitmask of every Flock predicate that matched, mirroring FLOCK_SIG_* in
+/// firmware protocol.h. A bare 10-digit name (serial) is not standalone
+/// evidence; it only counts when the XUNTONG mfg ID corroborates it.
+abstract class FlockSignal {
+  static const int oui = 0x01;
+  static const int name = 0x02;
+  static const int serial = 0x04;
+  static const int mfg = 0x08;
+  static const int tn = 0x10;
+  static const int ravenUuid = 0x20;
+
+  static const int validated = serial | mfg | tn;
+}
+
 @freezed
 class FlockExtension with _$FlockExtension {
   const factory FlockExtension({
     @Default(false) bool isRaven,
     String? ravenFirmware,
+    @Default(0) int signals,
   }) = _FlockExtension;
 
   factory FlockExtension.fromJson(Map<String, dynamic> json) =>
       _$FlockExtensionFromJson(json);
+}
+
+extension FlockExtensionSignals on FlockExtension {
+  bool hasSignal(int bit) => (signals & bit) != 0;
+
+  /// Bare-serial name + XUNTONG mfg ID + TN serial all present.
+  bool get isValidated =>
+      (signals & FlockSignal.validated) == FlockSignal.validated;
 }
 
 @freezed

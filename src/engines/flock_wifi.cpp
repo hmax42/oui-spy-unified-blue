@@ -155,6 +155,7 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
     evt.timestamp_ms = millis();
     evt.method = method;
     evt.ext.flock.auth_mode = flockAuthCacheGet(matchMac);
+    evt.ext.flock.sig_mask = FLOCK_SIG_OUI;
     pushDetectionFromISR(&evt);
 }
 

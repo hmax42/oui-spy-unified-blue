@@ -47,10 +47,10 @@ extern volatile uint32_t g_engRawSeen;
 
 // Firmware version
 #ifndef FW_VERSION
-#define FW_VERSION     "0.4.9"
+#define FW_VERSION     "0.5.0"
 #endif
 #ifndef FW_VERSION_NUM
-#define FW_VERSION_NUM 0x000409
+#define FW_VERSION_NUM 0x000500
 #endif
 
 #ifndef OUISPY_BOARD
@@ -133,6 +133,17 @@ enum EngineState : uint8_t {
 #define METHOD_MFG_ID          2
 #define METHOD_RAVEN_UUID      3
 
+// Flock signal mask — every predicate that hit, not just the deciding one.
+// A bare 10-digit name (FLOCK_SIG_SERIAL) is not standalone evidence; it only
+// counts when corroborated by FLOCK_SIG_MFG.
+#define FLOCK_SIG_OUI          0x01
+#define FLOCK_SIG_NAME         0x02
+#define FLOCK_SIG_SERIAL       0x04
+#define FLOCK_SIG_MFG          0x08
+#define FLOCK_SIG_TN           0x10
+#define FLOCK_SIG_RAVEN_UUID   0x20
+#define FLOCK_SIG_VALIDATED    (FLOCK_SIG_SERIAL | FLOCK_SIG_MFG | FLOCK_SIG_TN)
+
 // Sky Spy methods
 #define METHOD_ODID_BLE        0
 #define METHOD_ODID_NAN        1
@@ -182,6 +193,7 @@ typedef struct __attribute__((packed)) {
             char    raven_fw[16];
             uint8_t auth_mode;
             char    name[32];
+            uint8_t sig_mask;
         } flock;
 
         // Sky Spy ODID

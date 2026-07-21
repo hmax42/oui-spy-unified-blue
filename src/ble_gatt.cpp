@@ -2379,7 +2379,8 @@ static size_t packDetection(const DetectionEvent* evt, uint8_t* buf) {
             memcpy(buf + 20, evt->ext.flock.raven_fw, 16);
             buf[36] = evt->ext.flock.auth_mode;
             memcpy(buf + 37, evt->ext.flock.name, 32);
-            len = 69;
+            buf[69] = evt->ext.flock.sig_mask;
+            len = 70;
             break;
         case ENGINE_SKYSPY:
             memcpy(buf + 19, evt->ext.odid.uav_id, 21);

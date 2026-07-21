@@ -42,24 +42,34 @@ class FlockBLECallback : public NimBLEAdvertisedDeviceCallbacks {
         bool isRaven = false;
         const char* ravenFW = "";
         char tnSerial[20] = {0};
+        uint8_t sigMask = 0;
 
-        if (flockMatchOui(mac)) {
-            detected = true;
-            method = METHOD_OUI_MATCH;
-        }
-
-        if (!detected && !name.empty() && flockMatchNameStr(name.c_str())) {
-            detected = true;
-            method = METHOD_NAME_MATCH;
-        }
-
-        if (!detected && dev->haveManufacturerData()) {
+        if (dev->haveManufacturerData()) {
             std::string data = dev->getManufacturerData();
             if (flockMatchMfgPayload((const uint8_t*)data.data(), data.size(),
                                      tnSerial, sizeof(tnSerial))) {
-                detected = true;
-                method = METHOD_MFG_ID;
+                sigMask |= FLOCK_SIG_MFG;
+                if (tnSerial[0]) sigMask |= FLOCK_SIG_TN;
             }
+        }
+        if (flockMatchOui(mac)) sigMask |= FLOCK_SIG_OUI;
+        if (!name.empty()) {
+            if (flockMatchNameStr(name.c_str()))        sigMask |= FLOCK_SIG_NAME;
+            if (flockMatchBareSerialName(name.c_str())) sigMask |= FLOCK_SIG_SERIAL;
+        }
+
+        if (sigMask & FLOCK_SIG_OUI) {
+            detected = true;
+            method = METHOD_OUI_MATCH;
+        } else if (sigMask & FLOCK_SIG_NAME) {
+            detected = true;
+            method = METHOD_NAME_MATCH;
+        } else if ((sigMask & FLOCK_SIG_SERIAL) && (sigMask & FLOCK_SIG_MFG)) {
+            detected = true;
+            method = METHOD_NAME_MATCH;
+        } else if (sigMask & FLOCK_SIG_MFG) {
+            detected = true;
+            method = METHOD_MFG_ID;
         }
 
         if (!detected) {
@@ -67,6 +77,7 @@ class FlockBLECallback : public NimBLEAdvertisedDeviceCallbacks {
                 detected = true;
                 method = METHOD_RAVEN_UUID;
                 isRaven = true;
+                sigMask |= FLOCK_SIG_RAVEN_UUID;
             }
         }
 
@@ -94,13 +105,17 @@ class FlockBLECallback : public NimBLEAdvertisedDeviceCallbacks {
             strncpy(evt.ext.flock.name, name.c_str(),
                     sizeof(evt.ext.flock.name) - 1);
         }
+        evt.ext.flock.sig_mask = sigMask;
         pushDetection(&evt);
 
         std::string addrStr = dev->getAddress().toString();
         const char* methodStr[] = {"oui", "name", "mfg_id", "raven_uuid"};
-        Serial.printf("[FLOCK-BLE] %s %s RSSI:%d [%s]%s%s%s%s\n",
+        Serial.printf("[FLOCK-BLE] %s %s RSSI:%d [%s] sig=0x%02X%s%s%s%s%s\n",
                       addrStr.c_str(), name.c_str(), rssi,
                       method < 4 ? methodStr[method] : "?",
+                      sigMask,
+                      (sigMask & FLOCK_SIG_VALIDATED) == FLOCK_SIG_VALIDATED
+                          ? " VALIDATED" : "",
                       isRaven ? " RAVEN:" : "",
                       isRaven ? ravenFW : "",
                       tnSerial[0] ? " " : "",

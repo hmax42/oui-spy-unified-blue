@@ -1007,6 +1007,13 @@ class WardriveController extends ChangeNotifier {
       wardrive: engine == Engine.wardrive
           ? WardriveExtension(ssid: ssid, authMode: authMode, deviceName: deviceName)
           : null,
+      flock: (engine == Engine.flockBle || engine == Engine.flockWifi)
+          ? FlockExtension(
+              isRaven: (row['isRaven'] as bool?) ?? false,
+              ravenFirmware: row['ravenFirmware'] as String?,
+              signals: (row['flockSignals'] as int?) ?? 0,
+            )
+          : null,
       odid: engine == Engine.skySpy
           ? OdidExtension(
               uavId: row['uavId'] as String?,
@@ -1359,6 +1366,9 @@ class WardriveController extends ChangeNotifier {
         droneHeading: drift.Value(detection.odid?.droneHeading),
         pilotLat: drift.Value(detection.odid?.pilotLat),
         pilotLon: drift.Value(detection.odid?.pilotLon),
+        isRaven: drift.Value(detection.flock?.isRaven),
+        ravenFirmware: drift.Value(detection.flock?.ravenFirmware),
+        flockSignals: drift.Value(detection.flock?.signals),
       ));
     } catch (e) {
       DebugLog.log('SPOOL: insert failed for ${detection.macAddress}: $e');
@@ -1404,6 +1414,9 @@ class WardriveController extends ChangeNotifier {
         droneHeading: drift.Value(detection.odid?.droneHeading),
         pilotLat: drift.Value(detection.odid?.pilotLat),
         pilotLon: drift.Value(detection.odid?.pilotLon),
+        isRaven: drift.Value(detection.flock?.isRaven),
+        ravenFirmware: drift.Value(detection.flock?.ravenFirmware),
+        flockSignals: drift.Value(detection.flock?.signals),
       ));
     } catch (e) {
       DebugLog.log('AWAY-LIVE: insert failed for ${detection.macAddress}: $e');
@@ -1633,6 +1646,9 @@ class WardriveController extends ChangeNotifier {
       droneHeading: drift.Value(detection.odid?.droneHeading),
       pilotLat: drift.Value(detection.odid?.pilotLat),
       pilotLon: drift.Value(detection.odid?.pilotLon),
+      isRaven: drift.Value(detection.flock?.isRaven),
+      ravenFirmware: drift.Value(detection.flock?.ravenFirmware),
+      flockSignals: drift.Value(detection.flock?.signals),
     )).catchError((e) => DebugLog.log('WARDRIVE: insertDetection failed: $e'));
 
     notifyListeners();

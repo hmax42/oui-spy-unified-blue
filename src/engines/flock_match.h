@@ -65,24 +65,30 @@ static inline void flockMatchInit() {
 }
 
 // ----------------------------------------------------------------------------
-// Name match — case-insensitive substring against pattern list.
-// Plus post-March-2025 firmware: bare 10-digit decimal name (Penguin drop).
+// Name match — case-insensitive substring against pattern list. Standalone
+// evidence: these strings are unambiguous.
 // ----------------------------------------------------------------------------
 static inline bool flockMatchNameStr(const char* name) {
     if (!name || !name[0]) return false;
     for (int i = 0; i < FLOCK_NAME_PATTERN_COUNT; i++) {
         if (strcasestr(name, FLOCK_NAME_PATTERNS[i])) return true;
     }
-    // 10-digit decimal pattern (Penguin post-March-2025)
-    int len = (int)strlen(name);
-    if (len == 10) {
-        bool allDigit = true;
-        for (int i = 0; i < 10; i++) {
-            if (name[i] < '0' || name[i] > '9') { allDigit = false; break; }
-        }
-        if (allDigit) return true;
-    }
     return false;
+}
+
+// ----------------------------------------------------------------------------
+// Bare 10-digit decimal name — post-March-2025 Penguin firmware dropped the
+// "Penguin-" prefix, leaving the serial alone. NOT standalone evidence: any
+// device may advertise a 10-digit name. Callers must corroborate with the
+// XUNTONG mfg ID before treating this as a Flock hit.
+// ----------------------------------------------------------------------------
+static inline bool flockMatchBareSerialName(const char* name) {
+    if (!name) return false;
+    if (strlen(name) != 10) return false;
+    for (int i = 0; i < 10; i++) {
+        if (name[i] < '0' || name[i] > '9') return false;
+    }
+    return true;
 }
 
 // ----------------------------------------------------------------------------

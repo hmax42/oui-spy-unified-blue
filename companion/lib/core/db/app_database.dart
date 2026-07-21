@@ -58,7 +58,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -83,6 +83,9 @@ class AppDatabase extends _$AppDatabase {
           if (existing.isEmpty) {
             await m.createTable(wigleUploads);
           }
+        }
+        if (from < 6) {
+          await m.addColumn(detections, detections.flockSignals);
         }
       },
     );
@@ -199,6 +202,9 @@ class AppDatabase extends _$AppDatabase {
               'pilotLat': r.pilotLat,
               'pilotLon': r.pilotLon,
               'approxGps': r.approxGps,
+              'isRaven': r.isRaven,
+              'ravenFirmware': r.ravenFirmware,
+              'flockSignals': r.flockSignals,
             })
         .toList();
   }
