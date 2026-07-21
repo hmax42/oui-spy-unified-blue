@@ -30,6 +30,9 @@ static volatile uint8_t wardriveRadio = 0x03;
 static uint8_t channelStart = 1;
 static uint8_t channelEnd   = 14;
 static unsigned long lastChannelHop = 0;
+#ifdef OUISPY_DUAL_BAND
+static uint8_t wardrive24Mode = 0;
+#endif
 
 #ifdef OUISPY_DUAL_BAND
 static const uint8_t k5GhzChannels[] = {
@@ -71,25 +74,37 @@ static void buildHopSchedule(void) {
     hopScheduleLen = 0;
 #ifdef OUISPY_DUAL_BAND
     {
+        uint8_t ch24[16]; uint8_t ch24n = 0;
+        if (wardrive24Mode == 1) {
+            const uint8_t p[3] = {1, 6, 11};
+            for (uint8_t k = 0; k < 3; k++)
+                if (p[k] >= channelStart && p[k] <= channelEnd) ch24[ch24n++] = p[k];
+        } else {
+            for (uint16_t c = channelStart; c <= channelEnd && ch24n < 16; c++)
+                ch24[ch24n++] = (uint8_t)c;
+        }
+        if (ch24n == 0) ch24[ch24n++] = channelStart;
+
         const bool en24 = wifiChanEnabled(1);
         const bool en5  = wifiChanEnabled(36);
         if (en24 && en5) {
-            uint16_t h = channelStart;
-            for (uint8_t i = 0; i < sizeof(k5GhzChannels) && hopScheduleLen < WD_MAX_HOPS; i++) {
-                if ((i % 2) == 0 && hopScheduleLen < WD_MAX_HOPS) {
-                    hopSchedule[hopScheduleLen] = (uint8_t)h;
-                    hopDwellMs[hopScheduleLen] = scanDwellForChannel((uint8_t)h);
-                    hopScheduleLen++;
-                    h = (h >= channelEnd) ? channelStart : (uint16_t)(h + 1);
+            uint8_t i24 = 0, i5 = 0;
+            while (hopScheduleLen < WD_MAX_HOPS && (i5 < sizeof(k5GhzChannels) || i24 < ch24n)) {
+                if (i24 < ch24n) {
+                    hopSchedule[hopScheduleLen] = ch24[i24];
+                    hopDwellMs[hopScheduleLen] = scanDwellForChannel(ch24[i24]);
+                    hopScheduleLen++; i24++;
                 }
-                hopSchedule[hopScheduleLen] = k5GhzChannels[i];
-                hopDwellMs[hopScheduleLen] = scanDwellForChannel(k5GhzChannels[i]);
-                hopScheduleLen++;
+                for (uint8_t b = 0; b < 2 && i5 < sizeof(k5GhzChannels) && hopScheduleLen < WD_MAX_HOPS; b++) {
+                    hopSchedule[hopScheduleLen] = k5GhzChannels[i5];
+                    hopDwellMs[hopScheduleLen] = scanDwellForChannel(k5GhzChannels[i5]);
+                    hopScheduleLen++; i5++;
+                }
             }
         } else if (en24) {
-            for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < WD_MAX_HOPS; c++) {
-                hopSchedule[hopScheduleLen] = (uint8_t)c;
-                hopDwellMs[hopScheduleLen] = scanDwellForChannel((uint8_t)c);
+            for (uint8_t k = 0; k < ch24n && hopScheduleLen < WD_MAX_HOPS; k++) {
+                hopSchedule[hopScheduleLen] = ch24[k];
+                hopDwellMs[hopScheduleLen] = scanDwellForChannel(ch24[k]);
                 hopScheduleLen++;
             }
         } else {
@@ -107,6 +122,7 @@ static void buildHopSchedule(void) {
         hopScheduleLen++;
     }
 #endif
+#ifndef OUISPY_DUAL_BAND
     const uint8_t kPri[3] = {1, 6, 11};
     for (uint8_t i = 0; i < 3 && hopScheduleLen < WD_MAX_HOPS; i++) {
         if (kPri[i] >= channelStart && kPri[i] <= channelEnd && wifiChanEnabled(kPri[i])) {
@@ -115,6 +131,7 @@ static void buildHopSchedule(void) {
             hopScheduleLen++;
         }
     }
+#endif
     // Node mode: ensure the sweep visits the mesh channel (ch1) so ESP-NOW
     // rides the natural dwell instead of a forced scan-pausing park. ch1 is a
     // real, dense channel, so this dwell still logs networks. Skipped in solo
@@ -134,6 +151,11 @@ static void buildHopSchedule(void) {
         hopDwellMs[0] = scanDwellForChannel(channelStart);
         hopScheduleLen = 1;
     }
+#ifdef OUISPY_SWEEPLOG
+    Serial.printf("[WDSCHED] len=%u:", hopScheduleLen);
+    for (uint8_t i = 0; i < hopScheduleLen; i++) Serial.printf(" %u", hopSchedule[i]);
+    Serial.println();
+#endif
     hopIdx = 0;
     currentChannel = hopSchedule[0];
 }
@@ -731,6 +753,9 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
     uint8_t  prevStart = channelStart, prevEnd = channelEnd;
     uint16_t prevPri = priorityDwellMs, prevNorm = normalDwellMs;
     uint8_t  prevRadio = wardriveRadio;
+#ifdef OUISPY_DUAL_BAND
+    uint8_t  prev24Mode = wardrive24Mode;
+#endif
 
     uint8_t newRadio = payload[0] & 0x03;
     if (newRadio == 0) newRadio = 0x03;
@@ -758,6 +783,9 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
             channelEnd = ce;
         }
     }
+#ifdef OUISPY_DUAL_BAND
+    if (len >= 12) wardrive24Mode = payload[11] & 0x01;
+#endif
 
     if (wardriveActive && newRadio != prevRadio) {
         Serial.printf("[WARDRIVE] radio change 0x%02X->0x%02X while running — restart\n",
@@ -769,6 +797,9 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
 
     bool scheduleChanged = (channelStart != prevStart) || (channelEnd != prevEnd) ||
                            (priorityDwellMs != prevPri) || (normalDwellMs != prevNorm);
+#ifdef OUISPY_DUAL_BAND
+    scheduleChanged = scheduleChanged || (wardrive24Mode != prev24Mode);
+#endif
     if (scheduleChanged || !wardriveActive) {
         buildHopSchedule();
     } else {
@@ -779,6 +810,9 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
         wardriveRadio, channelStart, channelEnd,
         priorityDwellMs, normalDwellMs,
         bleScanDurationMs, bleScanIntervalMs);
+#ifdef OUISPY_DUAL_BAND
+    Serial.printf("[WARDRIVE] 2.4 mode=%s\n", wardrive24Mode ? "1/6/11" : "all");
+#endif
 }
 
 uint16_t wardriveGetBleScanDurationMs(void) { return bleScanDurationMs; }
