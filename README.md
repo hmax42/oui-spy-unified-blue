@@ -205,4 +205,4 @@ flutter build macos --release
 
 ## Disclaimer
 
-Security-research and privacy-auditing tool. Detecting surveillance hardware in public is legal in most jurisdictions; comply with local laws on wireless scanning and interception. GATT exploitation actions carry risk. Lawful use only — authors not responsible for misuse.
+Security-research and privacy-auditing tool. Detecting surveillance hardware in public is legal in most jurisdictions; comply with local laws on wireless scanning and interception. Lawful use only — authors not responsible for misuse.
