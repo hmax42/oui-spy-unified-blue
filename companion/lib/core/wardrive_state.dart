@@ -1465,6 +1465,8 @@ class WardriveController extends ChangeNotifier {
       allowStart: allowStart,
       activeLabel: _liveActivityLabel(engineNames),
       uniqueCount: uniqueMacs.length,
+      wifiCount: _wifiNetworkMacs.length,
+      bleCount: uniqueMacs.length - _wifiNetworkMacs.length,
       flockCount: _flockMacs.length,
       droneCount: droneCount,
       detectorHits: includesDetector ? detectorCount : 0,

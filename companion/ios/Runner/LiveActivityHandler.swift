@@ -106,6 +106,8 @@ class LiveActivityHandler {
         return OuiSpyLiveActivityAttributes.ContentState(
             mode: mode,
             uniqueCount: args["uniqueCount"] as? Int ?? 0,
+            wifiCount: args["wifiCount"] as? Int ?? 0,
+            bleCount: args["bleCount"] as? Int ?? 0,
             flockCount: args["flockCount"] as? Int ?? 0,
             droneCount: args["droneCount"] as? Int ?? 0,
             detectorHits: args["detectorHits"] as? Int ?? 0,
