@@ -1,0 +1,39 @@
+[
+  {
+    "version": "0.5.0",
+    "ref": "10cc8848282d39ab95d48a095c3e461f4d37ae7a",
+    "targets": [
+      "node-xiao_s3",
+      "node-xiao_c5",
+      "node-s3_devkitc",
+      "mgr-xiao_s3",
+      "mgr-s3_devkitc",
+      "mgr-xiao_c3",
+      "mgr-wroom"
+    ]
+  },
+  {
+    "version": "0.4.9",
+    "ref": "2bf2f610bcb511a69e901cfb68ac0e8f059a2e44",
+    "targets": [
+      "node-xiao_s3",
+      "node-s3_devkitc",
+      "mgr-xiao_s3",
+      "mgr-s3_devkitc",
+      "mgr-xiao_c3",
+      "mgr-wroom"
+    ]
+  },
+  {
+    "version": "0.4.8",
+    "ref": "3212290c6662ba3d30a5961ea1ec869186124a5c",
+    "targets": [
+      "node-xiao_s3",
+      "node-s3_devkitc",
+      "mgr-xiao_s3",
+      "mgr-s3_devkitc",
+      "mgr-xiao_c3",
+      "mgr-wroom"
+    ]
+  }
+]

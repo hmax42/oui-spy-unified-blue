@@ -144,6 +144,7 @@ jobs:
       - name: Copy release bins into docs/firmware
         run: |
           VERSION="${GITHUB_REF_NAME}"
+          : > "${RUNNER_TEMP}/targets.txt"
           for pair in node:xiao_s3 node:s3_devkitc node:xiao_c5 \
                       mgr:xiao_s3 mgr:s3_devkitc mgr:xiao_c3 mgr:wroom; do
             ROLE="${pair%%:*}"; BOARD="${pair##*:}"
@@ -159,18 +160,41 @@ jobs:
               fi
               cp "$SRC" "${DEST}/${OUT}.bin"
             done
+            echo "${ROLE}-${BOARD}" >> "${RUNNER_TEMP}/targets.txt"
           done
 
-      - name: Commit and push
+      - name: Commit bins, record version pin, push
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/firmware
           if git diff --cached --quiet; then
             echo "flasher bins already current"
-            exit 0
+          else
+            git commit -m "chore: web flasher bins ${GITHUB_REF_NAME}"
           fi
-          git commit -m "chore: web flasher bins ${GITHUB_REF_NAME}"
+
+          TAG="${GITHUB_REF_NAME}" SHA="$(git rev-parse HEAD)" \
+          TARGETS="$(tr '\n' ' ' < "${RUNNER_TEMP}/targets.txt")" python3 - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path('docs/firmware/versions.json')
+          entries = json.loads(p.read_text()) if p.exists() else []
+          version = os.environ['TAG'].lstrip('v')
+          entries = [e for e in entries if e.get('version') != version]
+          entries.insert(0, {
+              'version': version,
+              'ref': os.environ['SHA'],
+              'targets': os.environ['TARGETS'].split(),
+          })
+          p.write_text(json.dumps(entries, indent=2) + '\n')
+          PY
+
+          git add docs/firmware/versions.json
+          if git diff --cached --quiet; then
+            echo "flasher version manifest already current"
+          else
+            git commit -m "chore: flasher version manifest ${GITHUB_REF_NAME}"
+          fi
           git push origin HEAD:companion
 
   release:
