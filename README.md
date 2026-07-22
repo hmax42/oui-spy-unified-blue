@@ -10,7 +10,11 @@
 
 <img width="320" alt="OUI-SPY APEX" src="https://github.com/user-attachments/assets/5a201c27-558b-4409-9e49-82d6e0176a4c" />
 
-**Spot the wireless devices watching you.** A pocket gadget that finds hidden trackers, Flock cameras, drones, and other snooping hardware nearby — and shows them live on your phone. Runs on a cheap ESP32 board — including the dual-band **ESP32-C5** that scans both **2.4 and 5 GHz** Wi-Fi — controlled from a free app. No SD card, no laptop.
+**"Snoop unto them - as they snoop unto us"** 
+
+Runs on a cheap ESP32 board — including the dual-band **ESP32-C5** that scans both **2.4 and 5 GHz** Wi-Fi. 
+
+> All controlled from a free app. No SD card, no laptop, no flash per-firmware. All data stored on device. **Full Wigle & WDGWARS support.**
 
 </div>
 
@@ -35,14 +39,14 @@ You need **one board** and the **app**.
 
 ---
 
-## What it finds
+## What it does
 
 Turn any of these on from the home screen:
 
 - **Trackers & tools** — AirTag / Find My tags following you, Flipper Zeros, Wi-Fi attacks, Meta smart glasses, plus anything you add to your own watchlist.
 - **Flock cameras** — Flock Safety license-plate cameras and Raven gunshot sensors.
 - **Drones** — nearby drones broadcasting FAA Remote ID, and where the pilot is standing.
-- **Foxhunt** — pick one device and let the beeper walk you to it (faster beeping = closer).
+- **Foxhunt** — pick one device and let the beeper (or RSSI meter) walk you to it (faster beeping = closer).
 - **Wardrive** — map every Wi-Fi and Bluetooth device around you, with GPS, WiGLE-style.
 - **Record** — save raw wireless traffic to a `.pcap` file for Wireshark.
 - **Unitree robots** — detect (and connect to) Unitree robot dogs.
