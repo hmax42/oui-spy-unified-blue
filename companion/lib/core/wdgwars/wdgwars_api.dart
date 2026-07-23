@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -7,7 +9,10 @@ class WdgwarsApi {
   WdgwarsApi({required String apiKey})
       : _dio = Dio(BaseOptions(
           baseUrl: 'https://wdgwars.pl',
-          headers: {'X-API-Key': apiKey},
+          headers: {
+            'X-API-Key': apiKey,
+            HttpHeaders.userAgentHeader: 'oui-spy-companion/1.0',
+          },
           connectTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(seconds: 30),
           validateStatus: (s) => s != null && s < 500,
@@ -29,27 +34,29 @@ class WdgwarsApi {
     return WdgwarsUserStats.fromJson(data);
   }
 
-  /// Upload a WigleWifi-1.6 CSV via the simple multipart endpoint.
+  /// Upload a CSV. Buffered body + explicit Content-Length, mirroring wdgwars'
+  /// own client (LOCOSP/pineapple_pager_wdgwars uploader/wdgwars.py).
   Future<WdgwarsUploadResult> uploadCsv(
     File csvFile, {
     void Function(int sent, int total)? onProgress,
   }) async {
-    final bytes = await csvFile.length();
-    if (bytes == 0) throw WdgwarsApiException('CSV is empty — nothing to upload');
+    final csv = await csvFile.readAsBytes();
+    if (csv.isEmpty) throw WdgwarsApiException('CSV is empty — nothing to upload');
 
+    const retryDelays = [Duration(seconds: 2), Duration(seconds: 8)];
     Response<dynamic>? resp;
     Object? lastTransportError;
-    for (var attempt = 0; attempt < 3; attempt++) {
+
+    for (var attempt = 0; attempt <= retryDelays.length; attempt++) {
       try {
-        resp = await _postCsv(csvFile, bytes, onProgress);
+        resp = await _postCsv(csvFile.uri.pathSegments.last, csv, onProgress);
         break;
       } on DioException catch (e) {
         if (!_isTransient(e)) throw WdgwarsApiException(_dioMessage(e));
         lastTransportError = e.error ?? e;
-        if (attempt == 2) break;
-        // The TLS session itself is the casualty — never retry on the same one.
+        if (attempt == retryDelays.length) break;
         _resetConnection();
-        await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+        await Future<void>.delayed(retryDelays[attempt]);
       }
     }
     if (resp == null) {
@@ -63,12 +70,12 @@ class WdgwarsApi {
           (data['error'] as String?) ?? 'Invalid API key');
     }
     if (code == 413) {
-      throw WdgwarsApiException('File too large (max 30 MB) — split the session');
+      throw WdgwarsApiException('File too large — split the session');
     }
     if (code == 429) {
       final retry = resp.headers.value('retry-after');
       final wait = retry != null ? ' — retry in ${retry}s' : ' — try again shortly';
-      throw WdgwarsApiException('Rate limited (120/min)$wait');
+      throw WdgwarsApiException('Rate limited (30/min)$wait');
     }
     if (code == 202 || (code >= 200 && code < 300 && data['ok'] != false)) {
       return WdgwarsUploadResult.fromJson(data);
@@ -78,24 +85,33 @@ class WdgwarsApi {
   }
 
   Future<Response<dynamic>> _postCsv(
-    File csvFile,
-    int bytes,
+    String filename,
+    Uint8List csv,
     void Function(int sent, int total)? onProgress,
-  ) async {
-    final formData = FormData.fromMap({
-      'file': await MultipartFile.fromFile(
-        csvFile.path,
-        filename: csvFile.uri.pathSegments.last,
-        contentType: DioMediaType('text', 'csv'),
-      ),
-    });
+  ) {
+    final boundary =
+        '----ouispy${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}';
+    final head = utf8.encode('--$boundary\r\n'
+        'Content-Disposition: form-data; name="file"; filename="$filename"\r\n'
+        'Content-Type: text/csv\r\n\r\n');
+    final tail = utf8.encode('\r\n--$boundary--\r\n');
+
+    final body = Uint8List(head.length + csv.length + tail.length);
+    body.setRange(0, head.length, head);
+    body.setRange(head.length, head.length + csv.length, csv);
+    body.setRange(head.length + csv.length, body.length, tail);
 
     return _dio.post(
       '/api/upload-csv',
-      data: formData,
+      data: Stream.value(body),
       onSendProgress: onProgress,
       options: Options(
-        sendTimeout: _sendTimeoutFor(bytes),
+        headers: {
+          Headers.contentTypeHeader:
+              'multipart/form-data; boundary=$boundary',
+          Headers.contentLengthHeader: body.length,
+        },
+        sendTimeout: _sendTimeoutFor(body.length),
         receiveTimeout: const Duration(seconds: 180),
       ),
     );
@@ -109,7 +125,13 @@ class WdgwarsApi {
     return Duration(seconds: secs.clamp(60, 900));
   }
 
+  /// Reference client treats 400/401/403/413/415 as final, everything else retryable.
   static bool _isTransient(DioException e) {
+    final code = e.response?.statusCode;
+    if (code != null) {
+      return !(code == 400 || code == 401 || code == 403 ||
+          code == 413 || code == 415);
+    }
     if (e.type == DioExceptionType.connectionError ||
         e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.sendTimeout ||
@@ -132,13 +154,8 @@ class WdgwarsApi {
     return e.message ?? 'Upload failed (${e.type.name})';
   }
 
-  static String _transportMessage(Object? err) {
-    if (err is TlsException) {
-      return 'Connection corrupted mid-upload (TLS) — retried 3x. '
-          'Switch between WiFi and cellular, or split the session.';
-    }
-    return 'Network error during upload — retried 3x. Try again on a better link.';
-  }
+  static String _transportMessage(Object? err) =>
+      'Upload aborted: ${err ?? 'connection closed by server'}';
 
   void _resetConnection() {
     _dio.httpClientAdapter.close(force: true);
