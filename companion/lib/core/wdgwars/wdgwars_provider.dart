@@ -105,9 +105,12 @@ class WdgwarsProvider extends ChangeNotifier {
   ) async {
     if (_api == null || _uploadedSessions.contains(sessionId)) return null;
 
+    _error = null;
     _uploadingMap[sessionId] = true;
     notifyListeners();
 
+    var sent = 0;
+    var total = 0;
     try {
       final file = await wd.getCsvFile(sessionId);
       if (file == null) {
@@ -117,22 +120,27 @@ class WdgwarsProvider extends ChangeNotifier {
         return null;
       }
 
-      final result = await _api!.uploadCsv(file);
+      final result = await _api!.uploadCsv(file, onProgress: (s, t) {
+        sent = s;
+        total = t;
+      });
 
+      _error = null;
       _uploadedSessions.add(sessionId);
       _prefs.setStringList(_keyUploaded, _uploadedSessions.toList());
       refreshStats();
 
-      DebugLog.log('WDGWARS: uploaded $sessionId — ${result.summary}');
+      DebugLog.log('WDGWARS: uploaded $sessionId ($total B) — ${result.summary}');
       _uploadingMap.remove(sessionId);
       notifyListeners();
       return result;
     } on WdgwarsApiException catch (e) {
       _error = e.message;
-      DebugLog.log('WDGWARS: upload failed: $e');
+      DebugLog.log('WDGWARS: upload failed at $sent/$total B: ${e.message}');
     } catch (e) {
       _error = e.toString();
-      DebugLog.log('WDGWARS: upload error: $e');
+      DebugLog.log('WDGWARS: upload error at $sent/$total B: '
+          '${e.runtimeType} $e');
     }
 
     _uploadingMap.remove(sessionId);

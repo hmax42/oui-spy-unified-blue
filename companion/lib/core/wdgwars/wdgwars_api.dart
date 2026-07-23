@@ -46,6 +46,7 @@ class WdgwarsApi {
     const retryDelays = [Duration(seconds: 2), Duration(seconds: 8)];
     Response<dynamic>? resp;
     Object? lastTransportError;
+    final attemptLog = <String>[];
 
     for (var attempt = 0; attempt <= retryDelays.length; attempt++) {
       try {
@@ -54,13 +55,16 @@ class WdgwarsApi {
       } on DioException catch (e) {
         if (!_isTransient(e)) throw WdgwarsApiException(_dioMessage(e));
         lastTransportError = e.error ?? e;
+        attemptLog.add('#${attempt + 1} ${e.type.name}/'
+            '${(e.error ?? e).runtimeType}: ${e.error ?? e.message}');
         if (attempt == retryDelays.length) break;
         _resetConnection();
         await Future<void>.delayed(retryDelays[attempt]);
       }
     }
     if (resp == null) {
-      throw WdgwarsApiException(_transportMessage(lastTransportError));
+      throw WdgwarsApiException(
+          '${_transportMessage(lastTransportError)} [${attemptLog.join(' | ')}]');
     }
 
     final code = resp.statusCode ?? 0;
