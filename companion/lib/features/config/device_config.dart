@@ -24,6 +24,7 @@ import 'package:oui_spy/core/ignore_list_state.dart';
 import 'package:oui_spy/core/watchlist_state.dart';
 import 'package:oui_spy/core/export/wigle_csv_import.dart';
 import 'package:oui_spy/features/config/widgets/config_widgets.dart';
+import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/widgets/config_nav.dart';
 import 'package:oui_spy/features/config/ota_progress_stepper.dart';
 import 'package:oui_spy/features/notifications/notification_settings_screen.dart';
@@ -82,6 +83,9 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
           .clamp(0, kConfigSections.length - 1),
     );
     _tabController.addListener(_persistTab);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ref.read(configMenuWantedProvider)) _syncSectionSheet(true);
+    });
     _offlineGpsTag = prefs.getBool('offlineGpsTagEnabled') ?? false;
     _readDeviceConfig();
     final ble = ref.read(bleManagerProvider);
@@ -96,6 +100,19 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   void _persistTab() {
     if (_tabController.indexIsChanging) return;
     ref.read(sharedPreferencesProvider).setInt(_keyLastTab, _tabController.index);
+  }
+
+  Future<void> _syncSectionSheet(bool wanted) async {
+    if (!mounted) return;
+    if (!wanted) {
+      if (configSectionSheetOpen(context)) await Navigator.of(context).maybePop();
+      return;
+    }
+    await showConfigSectionSheet(context, _tabController);
+    if (!mounted) return;
+    if (ref.read(configMenuWantedProvider)) {
+      ref.read(configMenuWantedProvider.notifier).state = false;
+    }
   }
 
   @override
@@ -191,6 +208,9 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
+    ref.listen<bool>(configMenuWantedProvider, (_, wanted) {
+      _syncSectionSheet(wanted);
+    });
     return Scaffold(
       backgroundColor: t.background,
       body: GestureDetector(

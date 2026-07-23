@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/device_config.dart';
 import 'package:oui_spy/features/engines/detector_screen.dart';
 import 'package:oui_spy/features/engines/foxhunter_screen.dart';
@@ -218,16 +219,27 @@ class _GlobalPcapBannerOverlay extends ConsumerWidget {
   }
 }
 
-class AppShell extends StatefulWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.child});
   final Widget child;
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> {
   static const _routes = ['/home', '/feed', '/wardrive', '/config'];
+  static const _configIndex = 3;
+
+  void _onNavTap(int i) {
+    if (i == _configIndex) {
+      final notifier = ref.read(configMenuWantedProvider.notifier);
+      notifier.state = !notifier.state;
+    }
+    if (_routes[i] != GoRouterState.of(context).uri.path) {
+      context.go(_routes[i]);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -237,7 +249,7 @@ class _AppShellState extends State<AppShell> {
       body: widget.child,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: index < 0 ? 0 : index,
-        onTap: (i) => context.go(_routes[i]),
+        onTap: _onNavTap,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
