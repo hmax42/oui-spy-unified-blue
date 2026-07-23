@@ -105,6 +105,7 @@ class _OuiSpyAppState extends ConsumerState<OuiSpyApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ref.read(configMenuWantedProvider.notifier).state = false;
   }
 
   @override

@@ -117,6 +117,8 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
 
   @override
   void dispose() {
+    // Leaving with the sheet up must not re-open it on the next visit.
+    ref.read(configMenuWantedProvider.notifier).state = false;
     _connStateSub?.cancel();
     _tabController.removeListener(_persistTab);
     _tabController.dispose();
