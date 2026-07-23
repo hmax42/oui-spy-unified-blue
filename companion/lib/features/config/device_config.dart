@@ -1467,11 +1467,6 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
               ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Link your WiGLE account to upload wardrive data and track your rank.',
-          style: TextStyle(color: t.textDim, fontSize: 11),
-        ),
         const SizedBox(height: 12),
 
         if (wigle.isLoggedIn) ...[
@@ -1919,11 +1914,6 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
                   ),
                 ),
             ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Watch Dogs Go Wars — gamified wardriving. Capture territory for your gang.',
-            style: TextStyle(color: t.textDim, fontSize: 11),
           ),
           const SizedBox(height: 12),
 
@@ -2386,13 +2376,7 @@ class _WardriveConfigTabState extends ConsumerState<_WardriveConfigTab> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
         const ConfigSectionHeader(label: 'WARDRIVE ACCOUNTS'),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10, left: 2),
-          child: Text(
-            'Upload wardrive sessions and track your stats on WiGLE and WDGWars.',
-            style: TextStyle(color: t.textDim, fontSize: 11),
-          ),
-        ),
+        const SizedBox(height: 10),
         const _WigleSection(),
         const SizedBox(height: 18),
         const _WdgwarsSection(),
