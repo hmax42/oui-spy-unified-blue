@@ -186,8 +186,7 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
         bool flip = dev->isAdvertisingService(NimBLEUUID((uint16_t)0x3081)) ||
                     dev->isAdvertisingService(NimBLEUUID((uint16_t)0x3082)) ||
                     dev->isAdvertisingService(NimBLEUUID((uint16_t)0x3083));
-        if (flip) {
-            if (sigDedup.check(mac)) return;
+        if (flip && !sigDedup.check(mac)) {
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
             memcpy(evt.mac, mac, 6);
@@ -213,8 +212,7 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
         bool metaSvc = dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFD5F)) ||
                        dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFEB7)) ||
                        dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFEB8));
-        if (metaMfg || metaSvc) {
-            if (sigDedup.check(mac)) return;
+        if ((metaMfg || metaSvc) && !sigDedup.check(mac)) {
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
             memcpy(evt.mac, mac, 6);
@@ -229,8 +227,7 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
         }
     }
     if (sigMask & SIG_AXON) {
-        if (memcmp(mac, AXON_OUI, 3) == 0) {
-            if (sigDedup.check(mac)) return;
+        if (memcmp(mac, AXON_OUI, 3) == 0 && !sigDedup.check(mac)) {
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
             memcpy(evt.mac, mac, 6);

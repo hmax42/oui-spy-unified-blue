@@ -357,6 +357,9 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
                 int bodyLen = len - bodyOff;
                 if (bodyLen > 0) {
                     int r = isWildcardProbeIE(p + bodyOff, bodyLen);
+                    if (r == -1 && bodyLen > 4) {
+                        r = isWildcardProbeIE(p + bodyOff, bodyLen - 4);
+                    }
                     if (r == 1) fMethod = METHOD_WILDCARD_PROBE;
                 }
             }
