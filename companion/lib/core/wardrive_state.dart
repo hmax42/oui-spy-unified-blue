@@ -385,9 +385,13 @@ class WardriveController extends ChangeNotifier {
 
   LatLng? pendingZoomTarget;
 
+  /// Detection the map should isolate when it consumes [pendingZoomTarget].
+  Detection? pendingZoomDetection;
+
   /// Request the wardrive map to zoom to a specific location.
-  void requestZoom(double lat, double lon) {
+  void requestZoom(double lat, double lon, {Detection? detection}) {
     pendingZoomTarget = LatLng(lat, lon);
+    pendingZoomDetection = detection;
     notifyListeners();
   }
 
@@ -396,6 +400,12 @@ class WardriveController extends ChangeNotifier {
     final target = pendingZoomTarget;
     pendingZoomTarget = null;
     return target;
+  }
+
+  Detection? consumeZoomDetection() {
+    final d = pendingZoomDetection;
+    pendingZoomDetection = null;
+    return d;
   }
 
   DateTime? startTime;

@@ -229,6 +229,7 @@ void detectionZoomOnMap(
   ref.read(wardriveProvider).requestZoom(
         detection.latitude!,
         detection.longitude!,
+        detection: detection,
       );
   context.go('/wardrive');
 }

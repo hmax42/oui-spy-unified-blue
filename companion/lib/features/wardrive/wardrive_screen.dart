@@ -585,7 +585,9 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     // Consume pending zoom target from cross-tab navigation
     if (wd.pendingZoomTarget != null) {
       final zoom = wd.consumeZoomTarget()!;
+      final focus = wd.consumeZoomDetection();
       _followMode = false;
+      _focusedDetection = focus;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _mapController.move(zoom, 18);
@@ -1157,10 +1159,16 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     final filterActive = wd.flockFilter || wd.detectorFilter;
     final List<Detection> geoDetections;
     if (focused != null) {
-      geoDetections = allGeo
+      final hits = allGeo
           .where((d) =>
               d.macAddress == focused.macAddress && d.engine == focused.engine)
           .toList();
+      // The feed can focus a detection this session's map never held.
+      geoDetections = hits.isNotEmpty
+          ? hits
+          : (_hasMapCoord(focused.latitude, focused.longitude)
+              ? [focused]
+              : const <Detection>[]);
     } else if (filterActive) {
       geoDetections = allGeo.where((d) {
         if (wd.flockFilter &&
