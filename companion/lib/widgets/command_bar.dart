@@ -432,7 +432,7 @@ class CommandSheet extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(gap * 2, gap * 1.5, gap, gap),
+              padding: EdgeInsets.fromLTRB(gap * 2, gap * 1.5, gap * 0.5, gap),
               child: Row(
                 children: [
                   Expanded(
@@ -443,6 +443,13 @@ class CommandSheet extends StatelessWidget {
                     ),
                   ),
                   ?trailing,
+                  IconButton(
+                    icon: Icon(Icons.close,
+                        size: barIconSize(context), color: t.textDim),
+                    tooltip: 'Close',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
                 ],
               ),
             ),

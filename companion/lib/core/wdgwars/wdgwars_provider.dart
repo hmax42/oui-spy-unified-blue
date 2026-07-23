@@ -131,7 +131,7 @@ class WdgwarsProvider extends ChangeNotifier {
       _error = e.message;
       DebugLog.log('WDGWARS: upload failed: $e');
     } catch (e) {
-      _error = 'Upload failed: $e';
+      _error = e.toString();
       DebugLog.log('WDGWARS: upload error: $e');
     }
 

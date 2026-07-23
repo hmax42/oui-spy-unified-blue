@@ -143,6 +143,29 @@ static void findMyObserve(const uint8_t* mac, int rssi) {
 }
 
 static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* mac, int rssi) {
+#ifdef OUISPY_SIG_DEBUG
+    {
+        std::string dbgName = dev->getName();
+        Serial.printf("[SIG-DBG] %02x:%02x:%02x:%02x:%02x:%02x rssi=%d name='%s'",
+                      mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi,
+                      dbgName.c_str());
+        if (dev->haveManufacturerData()) {
+            std::string dm = dev->getManufacturerData();
+            if (dm.size() >= 2) {
+                Serial.printf(" cid=0x%04X mlen=%u",
+                              (unsigned)((uint8_t)dm[0] | ((uint8_t)dm[1] << 8)),
+                              (unsigned)dm.size());
+            }
+        }
+        if (dev->haveServiceUUID()) {
+            int un = dev->getServiceUUIDCount();
+            for (int i = 0; i < un; i++) {
+                Serial.printf(" svc=%s", dev->getServiceUUID(i).toString().c_str());
+            }
+        }
+        Serial.printf(" sig=0x%02X\n", sigMask);
+    }
+#endif
     if (dev->haveManufacturerData()) {
         std::string md = dev->getManufacturerData();
 #ifdef OUISPY_FM_DEBUG
@@ -253,16 +276,7 @@ class DetectorCallback : public NimBLEAdvertisedDeviceCallbacks {
 
 static DetectorCallback scanCb;
 
-static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type) {
-    g_engRawSeen++;
-    if (!scanning || !wifiActive) return;
-    if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) return;
-
-    wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
-    uint8_t* p = pkt->payload;
-    int len = pkt->rx_ctrl.sig_len;
-    if (len < 24) return;
-
+static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, uint8_t channel) {
     uint8_t fctl = p[0];
     if ((sigMask & SIG_DEAUTH) && (fctl == 0xC0 || fctl == 0xA0)) {
         unsigned long now = millis();
@@ -273,15 +287,15 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
             memcpy(evt.mac, &p[10], 6);
-            evt.rssi = pkt->rx_ctrl.rssi;
-            evt.channel = pkt->rx_ctrl.channel;
+            evt.rssi = rssi;
+            evt.channel = channel;
             evt.timestamp_ms = now;
             evt.method = METHOD_DET_DEAUTH;
             strncpy(evt.ext.detector.filter_desc, "Deauth/Disassoc storm",
                     sizeof(evt.ext.detector.filter_desc) - 1);
             pushDetectionFromISR(&evt);
         }
-        return;
+        return true;
     }
 
     if ((sigMask & SIG_PROBE) && fctl == 0x40) {
@@ -293,8 +307,8 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
                     DetectionEvent evt = {};
                     evt.engine_id = ENGINE_DETECTOR;
                     memcpy(evt.mac, src, 6);
-                    evt.rssi = pkt->rx_ctrl.rssi;
-                    evt.channel = pkt->rx_ctrl.channel;
+                    evt.rssi = rssi;
+                    evt.channel = channel;
                     evt.timestamp_ms = millis();
                     evt.method = METHOD_DET_PROBE;
                     uint8_t n = ssidLen < 31 ? ssidLen : 31;
@@ -304,7 +318,7 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
                 }
             }
         }
-        return;
+        return true;
     }
 
     static const uint8_t pwnMac[6] = {0xde, 0xad, 0xbe, 0xef, 0xde, 0xad};
@@ -315,33 +329,56 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
             memcpy(evt.mac, &p[10], 6);
-            evt.rssi = pkt->rx_ctrl.rssi;
-            evt.channel = pkt->rx_ctrl.channel;
+            evt.rssi = rssi;
+            evt.channel = channel;
             evt.timestamp_ms = now;
             evt.method = METHOD_DET_PWNAGOTCHI;
             strncpy(evt.ext.detector.filter_desc, "Pwnagotchi",
                     sizeof(evt.ext.detector.filter_desc) - 1);
             pushDetectionFromISR(&evt);
         }
-        return;
+        return true;
     }
 
     if (sigMask & SIG_AXON) {
         const uint8_t* src = &p[10];
-        if (memcmp(src, AXON_OUI, 3) == 0 && !axonDedupISR.check(src)) {
-            DetectionEvent evt = {};
-            evt.engine_id = ENGINE_DETECTOR;
-            memcpy(evt.mac, src, 6);
-            evt.rssi = pkt->rx_ctrl.rssi;
-            evt.channel = pkt->rx_ctrl.channel;
-            evt.timestamp_ms = millis();
-            evt.method = METHOD_DET_AXON;
-            strncpy(evt.ext.detector.filter_desc, "Axon (Law Enforcement)",
-                    sizeof(evt.ext.detector.filter_desc) - 1);
-            pushDetectionFromISR(&evt);
+        if (memcmp(src, AXON_OUI, 3) == 0) {
+            if (!axonDedupISR.check(src)) {
+                DetectionEvent evt = {};
+                evt.engine_id = ENGINE_DETECTOR;
+                memcpy(evt.mac, src, 6);
+                evt.rssi = rssi;
+                evt.channel = channel;
+                evt.timestamp_ms = millis();
+                evt.method = METHOD_DET_AXON;
+                strncpy(evt.ext.detector.filter_desc, "Axon (Law Enforcement)",
+                        sizeof(evt.ext.detector.filter_desc) - 1);
+                pushDetectionFromISR(&evt);
+            }
+            return true;
         }
-        return;
     }
+
+    return false;
+}
+
+void IRAM_ATTR detectorCheckWifiSignaturesISR(const uint8_t* payload, int len, int rssi,
+                                              uint8_t channel) {
+    if (!scanning || sigMask == 0 || payload == nullptr || len < 24) return;
+    detectorSigFrameISR(payload, len, rssi, channel);
+}
+
+static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type) {
+    g_engRawSeen++;
+    if (!scanning || !wifiActive) return;
+    if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) return;
+
+    wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
+    uint8_t* p = pkt->payload;
+    int len = pkt->rx_ctrl.sig_len;
+    if (len < 24) return;
+
+    if (detectorSigFrameISR(p, len, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel)) return;
 
     const uint8_t* addr2 = &p[10];
     const TargetFilter* hit = matchFilterBytes(addr2);
@@ -376,6 +413,11 @@ void detectorCheckBleDevice(const uint8_t* mac, int rssi) {
     Serial.printf("[DETECTOR] BLE %02x:%02x:%02x:%02x:%02x:%02x RSSI:%d [%s] %s (via wardrive)\n",
                   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
                   rssi, hit->prefixLen == 6 ? "MAC" : "OUI", hit->desc);
+}
+
+void detectorCheckBleSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* mac, int rssi) {
+    if (!scanning || sigMask == 0 || dev == nullptr) return;
+    detectorCheckSignatures(dev, mac, rssi);
 }
 
 void detectorCheckBleUuid(NimBLEAdvertisedDevice* dev, const uint8_t* mac, int rssi) {
@@ -623,9 +665,7 @@ void detectorHostSuspend(bool suspend) {
             if (!meshIsEnabled()) WiFi.mode(WIFI_STA);
             wifiSnifferApplyPs();
             wifiCoexRegister(wifiSnifferCb, WIFI_PROMIS_FILTER_MASK_MGMT);
-#ifdef OUISPY_NIMBLE2
             wifiActive = true;
-#endif
         }
     }
 }

@@ -388,6 +388,7 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
     }
 
     if (wdDetectorActive) {
+        detectorCheckWifiSignaturesISR(p, len, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
         detectorCheckWifiDeviceISR(addr2, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
         if (!(addr1[0] & 0x01)) {
             detectorCheckWifiDeviceISR(addr1, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
@@ -460,6 +461,7 @@ class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
 
         uint8_t mac[6];
         bleAddrToMac(dev->getAddress().getNative(), mac);
+        if (wdDetectorActive) detectorCheckBleSignatures(dev, mac, dev->getRSSI());
         if (wardriveDedup.check(mac)) return;
 
         int rssi = dev->getRSSI();

@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:oui_spy/core/app_state.dart';
+import 'package:oui_spy/core/db/app_database.dart' show databaseProvider;
+import 'package:oui_spy/core/db/detection_mapper.dart';
+import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/drone_grouping.dart';
 import 'package:oui_spy/core/export/detections_csv.dart';
 import 'package:oui_spy/core/models/detection.dart';
@@ -47,11 +51,59 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   bool _sortAscending = false; // false = descending (newest/strongest/most first)
   bool _searchOpen = false;
   final _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
+  List<Detection> _dbHits = const [];
+  bool _dbSearching = false;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String q) {
+    setState(() => _searchQuery = q);
+    _searchDebounce?.cancel();
+    if (q.trim().isEmpty) {
+      setState(() {
+        _dbHits = const [];
+        _dbSearching = false;
+      });
+      return;
+    }
+    setState(() => _dbSearching = true);
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () => _runDbSearch(q));
+  }
+
+  Future<void> _runDbSearch(String q) async {
+    final term = q.trim();
+    if (term.isEmpty) return;
+    try {
+      final rows = await ref.read(databaseProvider).searchDetectionMaps(term);
+      if (!mounted || _searchQuery != q) return;
+      setState(() {
+        _dbHits = rows.map(detectionFromDbRow).toList();
+        _dbSearching = false;
+      });
+    } catch (e) {
+      DebugLog.log('FEED: history search failed: $e');
+      if (!mounted) return;
+      setState(() => _dbSearching = false);
+    }
+  }
+
+  /// Live feed rows plus stored-history hits the 500-row buffer no longer holds.
+  List<Detection> _withDbHits(List<Detection> live) {
+    if (_dbHits.isEmpty) return live;
+    final seen = <String>{
+      for (final d in live) '${d.macAddress}|${d.engine.name}',
+    };
+    final extra = _dbHits
+        .where((d) => seen.add('${d.macAddress}|${d.engine.name}'))
+        .toList();
+    if (extra.isEmpty) return live;
+    return [...live, ...extra];
   }
 
   bool get _allEnginesActive =>
@@ -79,13 +131,18 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     return labelForNode(_selectedNode!);
   }
 
-  void _toggleSearch() => setState(() {
-        _searchOpen = !_searchOpen;
-        if (!_searchOpen) {
-          _searchCtrl.clear();
-          _searchQuery = '';
-        }
-      });
+  void _toggleSearch() {
+    _searchDebounce?.cancel();
+    setState(() {
+      _searchOpen = !_searchOpen;
+      if (!_searchOpen) {
+        _searchCtrl.clear();
+        _searchQuery = '';
+        _dbHits = const [];
+        _dbSearching = false;
+      }
+    });
+  }
 
   void _resetEngineFilters() => setState(() {
         _activeFilters = Engine.values.toSet();
@@ -131,10 +188,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         if (_selectedNode == '' && d.sourceNodeId.isNotEmpty) return false;
         if (_selectedNode!.isNotEmpty && d.sourceNodeId != _selectedNode) return false;
       }
-      if (_searchQuery.isNotEmpty) {
-        final q = _searchQuery.toLowerCase();
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim().toLowerCase();
         return d.macAddress.toLowerCase().contains(q) ||
             d.deviceName.toLowerCase().contains(q) ||
+            d.ssid.toLowerCase().contains(q) ||
             d.method.toLowerCase().contains(q) ||
             d.sourceNodeId.toLowerCase().contains(q);
       }
@@ -167,7 +225,9 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     final state = ref.watch(appStateProvider);
     final wd = ref.watch(wardriveProvider);
     final merged = _mergeFlockFromWardrive(state.recentDetections, wd);
-    final filtered = _sorted(_filter(merged));
+    final searchScope =
+        _searchQuery.trim().isEmpty ? merged : _withDbHits(merged);
+    final filtered = _sorted(_filter(searchScope));
     final sourceNodes = state.isManagerConnected ? state.meshSourceNodes : const <String>{};
 
     final droneGroups = groupDronesByUavId(filtered);
@@ -227,12 +287,12 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             if (_searchOpen)
               CommandSearchField(
                 controller: _searchCtrl,
-                hintText: 'MAC, name, method, node…',
-                onChanged: (q) => setState(() => _searchQuery = q),
+                hintText: 'MAC, name, SSID, method, node…',
+                onChanged: _onSearchChanged,
                 onClose: _toggleSearch,
               ),
             if (_activeFilterCount > 0 || hasQuery)
-              _buildFilterStrip(t, filtered.length, merged.length,
+              _buildFilterStrip(t, filtered.length, searchScope.length,
                   state.labelForNode),
             const Divider(height: 1),
             if (_showStats && filtered.length >= 2)
@@ -318,6 +378,15 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         children: [
           Text('$shown / $total',
               style: barLabelStyle(context, t.textDim, bold: false)),
+          if (_searchQuery.trim().isNotEmpty) ...[
+            SizedBox(width: gap * 0.75),
+            Text(
+              _dbSearching ? 'HISTORY…' : 'ALL HISTORY',
+              style: barLabelStyle(
+                  context, _dbSearching ? t.textDim : AppTheme.accent,
+                  bold: false),
+            ),
+          ],
           SizedBox(width: gap),
           Expanded(
             child: SingleChildScrollView(

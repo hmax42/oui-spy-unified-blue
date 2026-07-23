@@ -388,6 +388,68 @@ class AppDatabase extends _$AppDatabase {
     return seen.values.toList();
   }
 
+  /// Full-history detection search (MAC / name / SSID / method / node).
+  Future<List<Map<String, dynamic>>> searchDetectionMaps(
+    String query, {
+    int limit = 2000,
+  }) async {
+    final q = query.trim();
+    if (q.isEmpty) return const [];
+    final like = '%${q.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%';
+    final rows = await customSelect(
+      'SELECT * FROM detections WHERE '
+      'mac_address LIKE ?1 ESCAPE \'\\\' OR '
+      'device_name LIKE ?1 ESCAPE \'\\\' OR '
+      'ssid LIKE ?1 ESCAPE \'\\\' OR '
+      'detection_method LIKE ?1 ESCAPE \'\\\' OR '
+      'node_id LIKE ?1 ESCAPE \'\\\' '
+      'ORDER BY app_timestamp DESC LIMIT ?2',
+      variables: [Variable.withString(like), Variable.withInt(limit)],
+      readsFrom: {detections},
+    ).get();
+
+    return rows.map((r) {
+      final d = detections.map(r.data);
+      return {
+        'id': d.id,
+        'sessionId': d.sessionId,
+        'nodeId': d.nodeId,
+        'macAddress': d.macAddress,
+        'deviceName': d.deviceName,
+        'engine': d.engine,
+        'detectionMethod': d.detectionMethod,
+        'rssi': d.rssi,
+        'channel': d.channel,
+        'deviceTimestampMs': d.deviceTimestampMs,
+        'appTimestamp': d.appTimestamp,
+        'ssid': d.ssid,
+        'authMode': d.authMode,
+        'count': d.count,
+        'latitude': d.latitude,
+        'longitude': d.longitude,
+        'altitude': d.altitude,
+        'speed': d.speed,
+        'heading': d.heading,
+        'accuracy': d.accuracy,
+        'satelliteCount': d.satelliteCount,
+        'uavId': d.uavId,
+        'operatorId': d.operatorId,
+        'droneLat': d.droneLat,
+        'droneLon': d.droneLon,
+        'altitudeMsl': d.altitudeMsl,
+        'heightAgl': d.heightAgl,
+        'droneSpeed': d.droneSpeed,
+        'droneHeading': d.droneHeading,
+        'pilotLat': d.pilotLat,
+        'pilotLon': d.pilotLon,
+        'approxGps': d.approxGps,
+        'isRaven': d.isRaven,
+        'ravenFirmware': d.ravenFirmware,
+        'flockSignals': d.flockSignals,
+      };
+    }).toList();
+  }
+
   /// Delete a single detection by its primary key.
   Future<void> deleteDetectionById(int id) =>
       (delete(detections)..where((d) => d.id.equals(id))).go();

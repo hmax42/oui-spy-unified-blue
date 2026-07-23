@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 
 class WdgwarsApi {
   WdgwarsApi({required String apiKey})
@@ -29,23 +30,31 @@ class WdgwarsApi {
   }
 
   /// Upload a WigleWifi-1.6 CSV via the simple multipart endpoint.
-  Future<WdgwarsUploadResult> uploadCsv(File csvFile) async {
-    final formData = FormData.fromMap({
-      'file': await MultipartFile.fromFile(
-        csvFile.path,
-        filename: csvFile.uri.pathSegments.last,
-        contentType: DioMediaType('text', 'csv'),
-      ),
-    });
+  Future<WdgwarsUploadResult> uploadCsv(
+    File csvFile, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final bytes = await csvFile.length();
+    if (bytes == 0) throw WdgwarsApiException('CSV is empty — nothing to upload');
 
-    final resp = await _dio.post(
-      '/api/upload-csv',
-      data: formData,
-      options: Options(
-        sendTimeout: const Duration(seconds: 60),
-        receiveTimeout: const Duration(seconds: 90),
-      ),
-    );
+    Response<dynamic>? resp;
+    Object? lastTransportError;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        resp = await _postCsv(csvFile, bytes, onProgress);
+        break;
+      } on DioException catch (e) {
+        if (!_isTransient(e)) throw WdgwarsApiException(_dioMessage(e));
+        lastTransportError = e.error ?? e;
+        if (attempt == 2) break;
+        // The TLS session itself is the casualty — never retry on the same one.
+        _resetConnection();
+        await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+      }
+    }
+    if (resp == null) {
+      throw WdgwarsApiException(_transportMessage(lastTransportError));
+    }
 
     final code = resp.statusCode ?? 0;
     final data = _asMap(resp.data);
@@ -66,6 +75,74 @@ class WdgwarsApi {
     }
     throw WdgwarsApiException(
         (data['error'] as String?) ?? 'Upload failed (HTTP $code)');
+  }
+
+  Future<Response<dynamic>> _postCsv(
+    File csvFile,
+    int bytes,
+    void Function(int sent, int total)? onProgress,
+  ) async {
+    final formData = FormData.fromMap({
+      'file': await MultipartFile.fromFile(
+        csvFile.path,
+        filename: csvFile.uri.pathSegments.last,
+        contentType: DioMediaType('text', 'csv'),
+      ),
+    });
+
+    return _dio.post(
+      '/api/upload-csv',
+      data: formData,
+      onSendProgress: onProgress,
+      options: Options(
+        sendTimeout: _sendTimeoutFor(bytes),
+        receiveTimeout: const Duration(seconds: 180),
+      ),
+    );
+  }
+
+  /// dio applies sendTimeout to the whole body transfer, not per-chunk, so it
+  /// has to scale with size: 60s of headroom + 12s per MB (~700 kbit/s floor).
+  static Duration _sendTimeoutFor(int bytes) {
+    final mb = bytes / (1024 * 1024);
+    final secs = 60 + (mb * 12).ceil();
+    return Duration(seconds: secs.clamp(60, 900));
+  }
+
+  static bool _isTransient(DioException e) {
+    if (e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout) {
+      return true;
+    }
+    final inner = e.error;
+    return inner is TlsException ||
+        inner is HandshakeException ||
+        inner is SocketException ||
+        inner is HttpException;
+  }
+
+  static String _dioMessage(DioException e) {
+    final data = _asMap(e.response?.data);
+    final serverMsg = data['error'] as String?;
+    if (serverMsg != null && serverMsg.isNotEmpty) return serverMsg;
+    final code = e.response?.statusCode;
+    if (code != null) return 'Server rejected the upload (HTTP $code)';
+    return e.message ?? 'Upload failed (${e.type.name})';
+  }
+
+  static String _transportMessage(Object? err) {
+    if (err is TlsException) {
+      return 'Connection corrupted mid-upload (TLS) — retried 3x. '
+          'Switch between WiFi and cellular, or split the session.';
+    }
+    return 'Network error during upload — retried 3x. Try again on a better link.';
+  }
+
+  void _resetConnection() {
+    _dio.httpClientAdapter.close(force: true);
+    _dio.httpClientAdapter = IOHttpClientAdapter();
   }
 
   static Map<String, dynamic> _asMap(dynamic raw) =>

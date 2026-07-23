@@ -29,6 +29,7 @@ class WigleApi {
 
   /// Upload a WiGLE CSV file.
   Future<WigleUploadResult> uploadCsv(File csvFile) async {
+    final bytes = await csvFile.length();
     final formData = FormData.fromMap({
       'file': await MultipartFile.fromFile(
         csvFile.path,
@@ -42,8 +43,8 @@ class WigleApi {
       '/file/upload',
       data: formData,
       options: Options(
-        sendTimeout: const Duration(seconds: 60),
-        receiveTimeout: const Duration(seconds: 60),
+        sendTimeout: _sendTimeoutFor(bytes),
+        receiveTimeout: const Duration(seconds: 120),
       ),
     );
 
@@ -62,6 +63,13 @@ class WigleApi {
       throw WigleApiException(data['message']?.toString() ?? 'Unknown error');
     }
     return WigleRanking.fromJson(data);
+  }
+
+  /// dio applies sendTimeout to the whole body transfer, not per-chunk.
+  static Duration _sendTimeoutFor(int bytes) {
+    final mb = bytes / (1024 * 1024);
+    final secs = 60 + (mb * 12).ceil();
+    return Duration(seconds: secs.clamp(60, 900));
   }
 
   void dispose() {
