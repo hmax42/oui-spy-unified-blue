@@ -62,6 +62,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   double _currentRotation = 0;
   double _povHeading = double.nan;
   _DetectionLayers? _cachedLayers;
+  Detection? _focusedDetection;
   String _cachedLayersKey = '';
   List<Geofence> _exclusionZones = [];
   bool _priming = false;
@@ -323,18 +324,13 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     if (mounted) setState(() => _exclusionZones = zones);
   }
 
-  void _fitToSessionBounds(
-    WardriveController wd, {
-    bool includeCurrentPosition = false,
-    LatLng? extraPoint,
-  }) {
+  void _fitToSessionBounds(WardriveController wd, {bool includeCurrentPosition = false}) {
     final points = <LatLng>[
       ...wd.routePoints.where((p) => p.latitude.isFinite && p.longitude.isFinite),
       ...wd.dedupedDetections
           .where((d) => _hasMapCoord(d.latitude, d.longitude))
           .where((d) => wd.isWithinSession(d.latitude!, d.longitude!))
           .map((d) => LatLng(d.latitude!, d.longitude!)),
-      ?extraPoint,
     ];
 
     if (includeCurrentPosition) {
@@ -405,22 +401,20 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     });
   }
 
+  /// Tapping a detection isolates it: the map drops every other pin until
+  /// the focus chip is cleared.
   void _zoomToDetection(Detection d) {
     if (!_hasMapCoord(d.latitude, d.longitude)) return;
+    setState(() {
+      _focusedDetection = d;
+      _followMode = false;
+    });
     _mapController.move(LatLng(d.latitude!, d.longitude!), 18);
-    if (_followMode) setState(() => _followMode = false);
   }
 
-  /// Tapping a row in a finished session's detection list frames the whole
-  /// session, with that detection guaranteed inside the viewport.
-  void _showSessionForDetection(WardriveController wd, Detection d) {
-    if (_followMode) setState(() => _followMode = false);
-    _fitToSessionBounds(
-      wd,
-      extraPoint: _hasMapCoord(d.latitude, d.longitude)
-          ? LatLng(d.latitude!, d.longitude!)
-          : null,
-    );
+  void _clearFocusedDetection() {
+    if (_focusedDetection == null) return;
+    setState(() => _focusedDetection = null);
   }
 
   static bool _hasMapCoord(double? lat, double? lon) {
@@ -785,6 +779,16 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
               top: horizonY, left: 0, right: 0, bottom: 0,
               child: mapStack,
             ),
+            if (_focusedDetection != null)
+              Positioned(
+                top: horizonY + 8, left: 0, right: 0,
+                child: Center(
+                  child: _FocusedDetectionChip(
+                    detection: _focusedDetection!,
+                    onClear: _clearFocusedDetection,
+                  ),
+                ),
+              ),
             if (wt.synthwaveSky)
               Positioned(
                 top: horizonY - 28, left: 0, right: 0, height: 36,
@@ -972,7 +976,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                   },
                   child: _CompletedSessionBar(
                     wd: wd,
-                    onZoomDetection: (d) => _showSessionForDetection(wd, d),
+                    onZoomDetection: (d) => _zoomToDetection(d),
                   ),
                 ),
               ),
@@ -1112,8 +1116,10 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
 
   _DetectionLayers _buildDetectionLayers(WardriveController wd, WardriveThemeData wt) {
     final recentLen = ref.read(appStateProvider).recentDetections.length;
+    final focus = _focusedDetection;
     final key = '${wd.dedupedDetections.length}|$recentLen|${wd.flockFilter}|'
-        '${wd.detectorFilter}|${_currentZoom.toStringAsFixed(1)}|${wd.sessionId}';
+        '${wd.detectorFilter}|${_currentZoom.toStringAsFixed(1)}|${wd.sessionId}|'
+        '${focus == null ? '' : '${focus.macAddress}|${focus.engine.name}'}';
     if (_cachedLayersKey == key && _cachedLayers != null) return _cachedLayers!;
     final layers = _computeDetectionLayers(wd, wt);
     _cachedLayers = layers;
@@ -1147,17 +1153,26 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
             d.latitude ?? droneRidPoint(d)!.latitude,
             d.longitude ?? droneRidPoint(d)!.longitude))
         .toList();
+    final focused = _focusedDetection;
     final filterActive = wd.flockFilter || wd.detectorFilter;
-    final geoDetections = filterActive
-        ? allGeo.where((d) {
-            if (wd.flockFilter &&
-                (d.engine == Engine.flockBle || d.engine == Engine.flockWifi)) {
-              return true;
-            }
-            if (wd.detectorFilter && d.engine == Engine.detector) return true;
-            return false;
-          }).toList()
-        : allGeo;
+    final List<Detection> geoDetections;
+    if (focused != null) {
+      geoDetections = allGeo
+          .where((d) =>
+              d.macAddress == focused.macAddress && d.engine == focused.engine)
+          .toList();
+    } else if (filterActive) {
+      geoDetections = allGeo.where((d) {
+        if (wd.flockFilter &&
+            (d.engine == Engine.flockBle || d.engine == Engine.flockWifi)) {
+          return true;
+        }
+        if (wd.detectorFilter && d.engine == Engine.detector) return true;
+        return false;
+      }).toList();
+    } else {
+      geoDetections = allGeo;
+    }
     if (geoDetections.isEmpty) return const _DetectionLayers.empty();
 
     final zoom = _currentZoom;
@@ -2196,6 +2211,64 @@ class _MapStyleButton extends StatelessWidget {
           border: Border.all(color: t.border),
         ),
         child: Icon(Icons.layers, size: 16, color: t.textSecondary),
+      ),
+    );
+  }
+}
+
+class _FocusedDetectionChip extends StatelessWidget {
+  const _FocusedDetectionChip({required this.detection, required this.onClear});
+  final Detection detection;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final name = detection.deviceName.isNotEmpty
+        ? detection.deviceName
+        : (detection.ssid.isNotEmpty ? detection.ssid : detection.macAddress);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onClear,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: t.surface.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: detection.engine.color.withValues(alpha: 0.6)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(detection.engine.icon, size: 12, color: detection.engine.color),
+              const SizedBox(width: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: Text(
+                  name,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: t.textPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('SHOW ALL',
+                  style: TextStyle(
+                    color: t.textDim,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  )),
+              const SizedBox(width: 4),
+              Icon(Icons.close, size: 12, color: t.textDim),
+            ],
+          ),
+        ),
       ),
     );
   }
