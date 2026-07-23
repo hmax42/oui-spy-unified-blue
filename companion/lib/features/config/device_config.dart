@@ -17,6 +17,7 @@ import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/ble/gatt_uuids.dart';
 import 'package:oui_spy/core/db/app_database.dart' hide Detection;
+import 'package:oui_spy/core/db/detection_mapper.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/ota/ota_service.dart';
 import 'package:oui_spy/core/oui/oui_lookup_service.dart';
@@ -4502,7 +4503,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
 
     wd.loadSession(sid).then((_) {
       if (lat != null && lon != null) {
-        wd.requestZoom(lat, lon);
+        wd.requestZoom(lat, lon, detection: detectionFromDbRow(det));
       }
       if (context.mounted) context.go('/wardrive');
     });

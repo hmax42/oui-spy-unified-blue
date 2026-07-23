@@ -162,51 +162,51 @@ class AppDatabase extends _$AppDatabase {
 
   /// Returns detection rows as maps for cross-module consumption
   /// (avoids drift Detection / model Detection name collision).
+  Map<String, dynamic> _detectionRowMap(Detection r) => {
+        'id': r.id,
+        'sessionId': r.sessionId,
+        'nodeId': r.nodeId,
+        'macAddress': r.macAddress,
+        'deviceName': r.deviceName,
+        'engine': r.engine,
+        'detectionMethod': r.detectionMethod,
+        'rssi': r.rssi,
+        'channel': r.channel,
+        'deviceTimestampMs': r.deviceTimestampMs,
+        'appTimestamp': r.appTimestamp,
+        'ssid': r.ssid,
+        'authMode': r.authMode,
+        'count': r.count,
+        'latitude': r.latitude,
+        'longitude': r.longitude,
+        'altitude': r.altitude,
+        'speed': r.speed,
+        'heading': r.heading,
+        'accuracy': r.accuracy,
+        'satelliteCount': r.satelliteCount,
+        'uavId': r.uavId,
+        'operatorId': r.operatorId,
+        'droneLat': r.droneLat,
+        'droneLon': r.droneLon,
+        'altitudeMsl': r.altitudeMsl,
+        'heightAgl': r.heightAgl,
+        'droneSpeed': r.droneSpeed,
+        'droneHeading': r.droneHeading,
+        'pilotLat': r.pilotLat,
+        'pilotLon': r.pilotLon,
+        'approxGps': r.approxGps,
+        'isRaven': r.isRaven,
+        'ravenFirmware': r.ravenFirmware,
+        'flockSignals': r.flockSignals,
+      };
+
   Future<List<Map<String, dynamic>>> getDetectionMapsForSession(
       String sessionId) async {
     final rows = await (select(detections)
           ..where((d) => d.sessionId.equals(sessionId))
           ..orderBy([(d) => OrderingTerm.asc(d.appTimestamp)]))
         .get();
-    return rows
-        .map((r) => {
-              'id': r.id,
-              'sessionId': r.sessionId,
-              'nodeId': r.nodeId,
-              'macAddress': r.macAddress,
-              'deviceName': r.deviceName,
-              'engine': r.engine,
-              'detectionMethod': r.detectionMethod,
-              'rssi': r.rssi,
-              'channel': r.channel,
-              'deviceTimestampMs': r.deviceTimestampMs,
-              'appTimestamp': r.appTimestamp,
-              'ssid': r.ssid,
-              'authMode': r.authMode,
-              'count': r.count,
-              'latitude': r.latitude,
-              'longitude': r.longitude,
-              'altitude': r.altitude,
-              'speed': r.speed,
-              'heading': r.heading,
-              'accuracy': r.accuracy,
-              'satelliteCount': r.satelliteCount,
-              'uavId': r.uavId,
-              'operatorId': r.operatorId,
-              'droneLat': r.droneLat,
-              'droneLon': r.droneLon,
-              'altitudeMsl': r.altitudeMsl,
-              'heightAgl': r.heightAgl,
-              'droneSpeed': r.droneSpeed,
-              'droneHeading': r.droneHeading,
-              'pilotLat': r.pilotLat,
-              'pilotLon': r.pilotLon,
-              'approxGps': r.approxGps,
-              'isRaven': r.isRaven,
-              'ravenFirmware': r.ravenFirmware,
-              'flockSignals': r.flockSignals,
-            })
-        .toList();
+    return rows.map(_detectionRowMap).toList();
   }
 
   Future<int> uniqueMacCount(String sessionId) async {
@@ -355,20 +355,7 @@ class AppDatabase extends _$AppDatabase {
       final method = r.detectionMethod;
       if (existing == null) {
         seen[key] = {
-          'id': r.id,
-          'sessionId': r.sessionId,
-          'macAddress': r.macAddress,
-          'deviceName': r.deviceName,
-          'engine': r.engine,
-          'detectionMethod': r.detectionMethod,
-          'rssi': r.rssi,
-          'channel': r.channel,
-          'appTimestamp': r.appTimestamp,
-          'latitude': r.latitude,
-          'longitude': r.longitude,
-          'ssid': r.ssid,
-          'authMode': r.authMode,
-          'uavId': r.uavId,
+          ..._detectionRowMap(r),
           'memberMacs': <String>{r.macAddress},
           'transports': <String>{if (method.isNotEmpty) method},
         };
