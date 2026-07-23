@@ -323,13 +323,18 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     if (mounted) setState(() => _exclusionZones = zones);
   }
 
-  void _fitToSessionBounds(WardriveController wd, {bool includeCurrentPosition = false}) {
+  void _fitToSessionBounds(
+    WardriveController wd, {
+    bool includeCurrentPosition = false,
+    LatLng? extraPoint,
+  }) {
     final points = <LatLng>[
       ...wd.routePoints.where((p) => p.latitude.isFinite && p.longitude.isFinite),
       ...wd.dedupedDetections
           .where((d) => _hasMapCoord(d.latitude, d.longitude))
           .where((d) => wd.isWithinSession(d.latitude!, d.longitude!))
           .map((d) => LatLng(d.latitude!, d.longitude!)),
+      ?extraPoint,
     ];
 
     if (includeCurrentPosition) {
@@ -404,6 +409,18 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     if (!_hasMapCoord(d.latitude, d.longitude)) return;
     _mapController.move(LatLng(d.latitude!, d.longitude!), 18);
     if (_followMode) setState(() => _followMode = false);
+  }
+
+  /// Tapping a row in a finished session's detection list frames the whole
+  /// session, with that detection guaranteed inside the viewport.
+  void _showSessionForDetection(WardriveController wd, Detection d) {
+    if (_followMode) setState(() => _followMode = false);
+    _fitToSessionBounds(
+      wd,
+      extraPoint: _hasMapCoord(d.latitude, d.longitude)
+          ? LatLng(d.latitude!, d.longitude!)
+          : null,
+    );
   }
 
   static bool _hasMapCoord(double? lat, double? lon) {
@@ -955,7 +972,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                   },
                   child: _CompletedSessionBar(
                     wd: wd,
-                    onZoomDetection: (d) => _zoomToDetection(d),
+                    onZoomDetection: (d) => _showSessionForDetection(wd, d),
                   ),
                 ),
               ),

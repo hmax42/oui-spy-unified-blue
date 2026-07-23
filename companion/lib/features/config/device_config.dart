@@ -48,6 +48,7 @@ class DeviceConfigScreen extends ConsumerStatefulWidget {
 
 class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     with SingleTickerProviderStateMixin {
+  static const _keyLastTab = 'config_last_tab';
   late TabController _tabController;
 
   bool _flockExtendedOui = false;
@@ -73,9 +74,15 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: kConfigSections.length, vsync: this);
-    _offlineGpsTag =
-        ref.read(sharedPreferencesProvider).getBool('offlineGpsTagEnabled') ?? false;
+    final prefs = ref.read(sharedPreferencesProvider);
+    _tabController = TabController(
+      length: kConfigSections.length,
+      vsync: this,
+      initialIndex: (prefs.getInt(_keyLastTab) ?? 0)
+          .clamp(0, kConfigSections.length - 1),
+    );
+    _tabController.addListener(_persistTab);
+    _offlineGpsTag = prefs.getBool('offlineGpsTagEnabled') ?? false;
     _readDeviceConfig();
     final ble = ref.read(bleManagerProvider);
     _connStateSub = ble.connectionState.listen((s) {
@@ -86,9 +93,15 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     });
   }
 
+  void _persistTab() {
+    if (_tabController.indexIsChanging) return;
+    ref.read(sharedPreferencesProvider).setInt(_keyLastTab, _tabController.index);
+  }
+
   @override
   void dispose() {
     _connStateSub?.cancel();
+    _tabController.removeListener(_persistTab);
     _tabController.dispose();
     _ssidController.dispose();
     _passController.dispose();
