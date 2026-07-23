@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/device_config.dart';
+import 'package:oui_spy/features/config/widgets/config_nav.dart'
+    show kConfigSectionSheetRoute;
 import 'package:oui_spy/features/engines/detector_screen.dart';
 import 'package:oui_spy/features/engines/foxhunter_screen.dart';
 import 'package:oui_spy/features/engines/skyspy_screen.dart';
@@ -232,10 +234,22 @@ class _AppShellState extends ConsumerState<AppShell> {
   static const _routes = ['/home', '/feed', '/wardrive', '/config'];
   static const _configIndex = 3;
 
+  /// The section sheet lives on the shell navigator, which sits below this
+  /// widget's context — reach it by key, not by Navigator.of(context).
+  bool get _sectionSheetOpen {
+    final nav = _shellNavigatorKey.currentState;
+    if (nav == null) return false;
+    var open = false;
+    nav.popUntil((r) {
+      if (r.settings.name == kConfigSectionSheetRoute) open = true;
+      return true;
+    });
+    return open;
+  }
+
   void _onNavTap(int i) {
     if (i == _configIndex) {
-      final notifier = ref.read(configMenuWantedProvider.notifier);
-      notifier.state = !notifier.state;
+      ref.read(configMenuWantedProvider.notifier).state = !_sectionSheetOpen;
     }
     if (_routes[i] != GoRouterState.of(context).uri.path) {
       context.go(_routes[i]);
