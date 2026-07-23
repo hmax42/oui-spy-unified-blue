@@ -2187,9 +2187,16 @@ class _WdgwarsStatsCard extends StatelessWidget {
                     children: [
                       const Icon(Icons.groups, size: 12, color: AppTheme.wdgwarsAlt),
                       const SizedBox(width: 4),
-                      Text(s.gang, style: const TextStyle(
-                        color: AppTheme.wdgwarsAlt, fontSize: 10, fontWeight: FontWeight.w700,
-                      )),
+                      Text(
+                        s.gangRole.isEmpty
+                            ? s.gang
+                            : '${s.gang} · ${s.gangRole.toUpperCase()}',
+                        style: const TextStyle(
+                          color: AppTheme.wdgwarsAlt,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -2217,6 +2224,31 @@ class _WdgwarsStatsCard extends StatelessWidget {
               _WigleStat(
                 icon: Icons.military_tech, label: 'Badges',
                 value: '${s.badges.length}', color: AppTheme.warning,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _WigleStat(
+                icon: Icons.today, label: 'Today',
+                value: _fmt(s.recentToday), color: AppTheme.wdgwarsAlt,
+              ),
+              _WigleStat(
+                icon: Icons.date_range, label: '7 Days',
+                value: _fmt(s.recent7d), color: AppTheme.wdgwars,
+              ),
+              _WigleStat(
+                icon: Icons.shield, label: 'Reinforced',
+                value: _fmt(s.reinforced), color: const Color(0xFFc4b5fd),
+              ),
+              _WigleStat(
+                icon: Icons.toll, label: 'Credits',
+                value: _fmt(s.credits), color: AppTheme.warning,
+              ),
+              _WigleStat(
+                icon: Icons.lock_open, label: 'Cracked',
+                value: _fmt(s.cracked), color: AppTheme.error,
               ),
             ],
           ),
@@ -2280,6 +2312,23 @@ class _WdgwarsStatsCard extends StatelessWidget {
               );
             }),
           ],
+          Builder(builder: (_) {
+            final meta = <String>[
+              if (s.country.isNotEmpty) s.country,
+              if (s.joined.isNotEmpty) 'joined ${s.joined}',
+              if (s.notes > 0) '${s.notes} notes',
+              if (s.bountiesCompleted > 0) '${s.bountiesCompleted} bounties',
+              if (s.creditsLifetime > 0) '${_fmt(s.creditsLifetime)} earned',
+            ];
+            if (meta.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                meta.join('  ·  '),
+                style: TextStyle(color: t.textDim, fontSize: 9, letterSpacing: 0.5),
+              ),
+            );
+          }),
         ],
       ),
     );

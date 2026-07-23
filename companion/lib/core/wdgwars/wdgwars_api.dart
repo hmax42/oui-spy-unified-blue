@@ -307,6 +307,17 @@ class WdgwarsUserStats {
     required this.dailyUsed,
     required this.dailyRemaining,
     required this.dailyCap,
+    this.gangRole = '',
+    this.country = '',
+    this.joined = '',
+    this.recentToday = 0,
+    this.recent7d = 0,
+    this.reinforced = 0,
+    this.notes = 0,
+    this.cracked = 0,
+    this.credits = 0,
+    this.creditsLifetime = 0,
+    this.bountiesCompleted = 0,
   });
 
   final String username;
@@ -326,10 +337,25 @@ class WdgwarsUserStats {
   final int dailyRemaining;
   final int dailyCap;
 
+  final String gangRole;
+  final String country;
+  final String joined;
+  final int recentToday;
+  final int recent7d;
+  final int reinforced;
+  final int notes;
+  final int cracked;
+  final int credits;
+  final int creditsLifetime;
+  final int bountiesCompleted;
+
   factory WdgwarsUserStats.fromJson(Map<String, dynamic> json) {
     final rankMap = json['your_rank'];
     final limitMap = json['new_ap_limit'];
+    final creditMap = json['credits'];
     int? asInt(dynamic v) => v is num ? v.toInt() : null;
+    int credit(String k) =>
+        creditMap is Map ? (asInt(creditMap[k]) ?? 0) : 0;
     return WdgwarsUserStats(
       username: (json['username'] as String?) ?? '',
       wifi: asInt(json['wifi']) ?? 0,
@@ -344,6 +370,17 @@ class WdgwarsUserStats {
       dailyUsed: limitMap is Map ? (asInt(limitMap['used']) ?? 0) : 0,
       dailyRemaining: limitMap is Map ? (asInt(limitMap['remaining']) ?? 0) : 0,
       dailyCap: limitMap is Map ? (asInt(limitMap['cap']) ?? 0) : 0,
+      gangRole: (json['gang_role'] as String?) ?? '',
+      country: (json['country'] as String?) ?? '',
+      joined: (json['joined'] as String?) ?? '',
+      recentToday: asInt(json['recent_today']) ?? 0,
+      recent7d: asInt(json['recent_7d']) ?? 0,
+      reinforced: asInt(json['reinforce_total']) ?? 0,
+      notes: asInt(json['notes']) ?? 0,
+      cracked: asInt(json['cracked']) ?? 0,
+      credits: credit('balance'),
+      creditsLifetime: credit('lifetime_earned'),
+      bountiesCompleted: credit('bounties_completed'),
     );
   }
 }
