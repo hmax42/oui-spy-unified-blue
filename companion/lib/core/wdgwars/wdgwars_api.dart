@@ -34,14 +34,15 @@ class WdgwarsApi {
     return WdgwarsUserStats.fromJson(data);
   }
 
-  /// Upload a CSV. Buffered body + explicit Content-Length, mirroring wdgwars'
-  /// own client (LOCOSP/pineapple_pager_wdgwars uploader/wdgwars.py).
+  /// Upload a CSV via the documented async endpoint (POST /api/v2/upload-csv),
+  /// gzipped — the API accepts .gz and it cuts a wardrive CSV ~20x.
   Future<WdgwarsUploadResult> uploadCsv(
     File csvFile, {
     void Function(int sent, int total)? onProgress,
   }) async {
-    final csv = await csvFile.readAsBytes();
-    if (csv.isEmpty) throw WdgwarsApiException('CSV is empty — nothing to upload');
+    final raw = await csvFile.readAsBytes();
+    if (raw.isEmpty) throw WdgwarsApiException('CSV is empty — nothing to upload');
+    final csv = Uint8List.fromList(GZipCodec(level: 9).encode(raw));
 
     const retryDelays = [Duration(seconds: 2), Duration(seconds: 8)];
     Response<dynamic>? resp;
@@ -50,7 +51,8 @@ class WdgwarsApi {
 
     for (var attempt = 0; attempt <= retryDelays.length; attempt++) {
       try {
-        resp = await _postCsv(csvFile.uri.pathSegments.last, csv, onProgress);
+        resp = await _postCsv(
+            '${csvFile.uri.pathSegments.last}.gz', csv, onProgress);
         break;
       } on DioException catch (e) {
         if (!_isTransient(e)) throw WdgwarsApiException(_dioMessage(e));
@@ -82,10 +84,42 @@ class WdgwarsApi {
       throw WdgwarsApiException('Rate limited (30/min)$wait');
     }
     if (code == 202 || (code >= 200 && code < 300 && data['ok'] != false)) {
+      final jobId = data['job_id']?.toString();
+      if (jobId != null && jobId.isNotEmpty) {
+        return _awaitJob(jobId, data);
+      }
       return WdgwarsUploadResult.fromJson(data);
     }
     throw WdgwarsApiException(
         (data['error'] as String?) ?? 'Upload failed (HTTP $code)');
+  }
+
+  /// Poll `/api/v2/upload-job/{id}` until terminal; falls back to the queued
+  /// receipt if the parser is still busy when we give up waiting.
+  Future<WdgwarsUploadResult> _awaitJob(
+      String jobId, Map<String, dynamic> queued) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 120));
+    var delay = const Duration(seconds: 2);
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(delay);
+      if (delay < const Duration(seconds: 6)) delay += const Duration(seconds: 1);
+      Map<String, dynamic> job;
+      try {
+        final r = await _dio.get('/api/v2/upload-job/$jobId');
+        job = _asMap(r.data);
+      } on DioException {
+        continue;
+      }
+      switch (job['status']) {
+        case 'done':
+          return WdgwarsUploadResult.fromJson(
+              {..._asMap(job['result']), 'job_id': jobId});
+        case 'failed':
+          throw WdgwarsApiException(
+              (job['error'] as String?) ?? 'WDGWars rejected the file');
+      }
+    }
+    return WdgwarsUploadResult.fromJson(queued);
   }
 
   Future<Response<dynamic>> _postCsv(
@@ -97,7 +131,7 @@ class WdgwarsApi {
         '----ouispy${DateTime.now().microsecondsSinceEpoch.toRadixString(16)}';
     final head = utf8.encode('--$boundary\r\n'
         'Content-Disposition: form-data; name="file"; filename="$filename"\r\n'
-        'Content-Type: text/csv\r\n\r\n');
+        'Content-Type: application/gzip\r\n\r\n');
     final tail = utf8.encode('\r\n--$boundary--\r\n');
 
     final body = Uint8List(head.length + csv.length + tail.length);
@@ -106,7 +140,7 @@ class WdgwarsApi {
     body.setRange(head.length + csv.length, body.length, tail);
 
     return _dio.post(
-      '/api/upload-csv',
+      '/api/v2/upload-csv',
       data: Stream.value(body),
       onSendProgress: onProgress,
       options: Options(
@@ -251,12 +285,16 @@ class WdgwarsUploadResult {
   final String? jobId;
 
   String get summary {
-    if (async) return 'Queued for WDGWars processing';
     final parts = <String>[];
-    if (accepted != null) parts.add('$accepted records');
-    if (newNetworks != null) parts.add('$newNetworks new');
-    if (mergedSamples != null) parts.add('$mergedSamples merged');
-    return parts.isEmpty ? 'Uploaded to WDGWars' : parts.join(' · ');
+    if (accepted != null) parts.add('$accepted imported');
+    if (newNetworks != null && newNetworks! > 0) parts.add('$newNetworks new');
+    if (mergedSamples != null && mergedSamples! > 0) {
+      parts.add('$mergedSamples merged');
+    }
+    if (parts.isEmpty) {
+      return async ? 'Queued for WDGWars processing' : 'Uploaded to WDGWars';
+    }
+    return parts.join(' · ');
   }
 
   factory WdgwarsUploadResult.fromJson(Map<String, dynamic> json) {
@@ -269,11 +307,12 @@ class WdgwarsUploadResult {
     }
 
     final jobId = json['job_id']?.toString();
+    final imported = pick(['imported', 'accepted', 'networks', 'total', 'count']);
     return WdgwarsUploadResult(
-      accepted: pick(['accepted', 'networks', 'total', 'count']),
-      newNetworks: pick(['new', 'new_networks', 'newNetworks']),
+      accepted: imported,
+      newNetworks: pick(['captured', 'new', 'new_networks', 'newNetworks']),
       mergedSamples: pick(['merged_samples', 'merged', 'mergedSamples']),
-      async: jobId != null && jobId.isNotEmpty,
+      async: imported == null && jobId != null && jobId.isNotEmpty,
       jobId: jobId,
     );
   }
