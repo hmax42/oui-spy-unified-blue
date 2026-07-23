@@ -11,6 +11,7 @@ import 'package:oui_spy/core/wdgwars/wdgwars_api.dart';
 class WdgwarsProvider extends ChangeNotifier {
   WdgwarsProvider(this._prefs) {
     _uploadedSessions.addAll(_prefs.getStringList(_keyUploaded) ?? const []);
+    _showTerritories = _prefs.getBool(_keyTerritories) ?? false;
     _loadCredentials();
   }
 
@@ -18,6 +19,8 @@ class WdgwarsProvider extends ChangeNotifier {
   static const _storage = FlutterSecureStorage();
   static const _keyApiKey = 'wdgwars_api_key';
   static const _keyUploaded = 'wdgwars_uploaded_sessions';
+  static const _keyTerritories = 'wdgwars_show_territories';
+  static const _territoryTtl = Duration(minutes: 5);
 
   WdgwarsApi? _api;
   String _apiKey = '';
@@ -28,10 +31,46 @@ class WdgwarsProvider extends ChangeNotifier {
   final Set<String> _uploadedSessions = {};
   final Map<String, bool> _uploadingMap = {};
 
+  List<WdgwarsTerritory> _territories = const [];
+  DateTime? _territoriesAt;
+  bool _territoriesLoading = false;
+  bool _showTerritories = false;
+
   bool get isLoggedIn => _isLoggedIn;
   bool get isLoading => _isLoading;
   WdgwarsUserStats? get stats => _stats;
   String? get error => _error;
+
+  List<WdgwarsTerritory> get territories => _territories;
+  bool get territoriesLoading => _territoriesLoading;
+  bool get showTerritories => _showTerritories && _isLoggedIn;
+
+  Future<void> setShowTerritories(bool on) async {
+    _showTerritories = on;
+    await _prefs.setBool(_keyTerritories, on);
+    notifyListeners();
+    if (on) await loadTerritories();
+  }
+
+  /// Gang hulls for the wardrive map. Server snapshot refreshes every 5 min.
+  Future<void> loadTerritories({bool force = false}) async {
+    if (_api == null || _territoriesLoading) return;
+    final at = _territoriesAt;
+    if (!force && at != null && DateTime.now().difference(at) < _territoryTtl) {
+      return;
+    }
+    _territoriesLoading = true;
+    notifyListeners();
+    try {
+      _territories = await _api!.getTerritories();
+      _territoriesAt = DateTime.now();
+      DebugLog.log('WDGWARS: ${_territories.length} territories loaded');
+    } catch (e) {
+      DebugLog.log('WDGWARS: territory load failed: $e');
+    }
+    _territoriesLoading = false;
+    notifyListeners();
+  }
 
   bool isUploaded(String sessionId) => _uploadedSessions.contains(sessionId);
   bool isUploading(String sessionId) => _uploadingMap[sessionId] == true;
@@ -43,6 +82,7 @@ class WdgwarsProvider extends ChangeNotifier {
       _isLoggedIn = true;
       notifyListeners();
       refreshStats();
+      if (_showTerritories) loadTerritories();
     }
   }
 
@@ -83,6 +123,8 @@ class WdgwarsProvider extends ChangeNotifier {
     _apiKey = '';
     _isLoggedIn = false;
     _stats = null;
+    _territories = const [];
+    _territoriesAt = null;
     await _storage.delete(key: _keyApiKey);
     notifyListeners();
     DebugLog.log('WDGWARS: unlinked');

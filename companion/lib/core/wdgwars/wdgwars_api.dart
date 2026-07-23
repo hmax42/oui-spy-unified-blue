@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
+import 'package:flutter/painting.dart' show Color;
+import 'package:latlong2/latlong.dart';
 
 class WdgwarsApi {
   WdgwarsApi({required String apiKey})
@@ -32,6 +34,20 @@ class WdgwarsApi {
       throw WdgwarsApiException('HTTP ${resp.statusCode}');
     }
     return WdgwarsUserStats.fromJson(data);
+  }
+
+  /// Gang territory hulls for the wardrive map (GET /api/territories).
+  Future<List<WdgwarsTerritory>> getTerritories() async {
+    final resp = await _dio.get('/api/territories');
+    final raw = resp.data;
+    if (resp.statusCode != 200 || raw is! List) {
+      throw WdgwarsApiException('Territories unavailable (HTTP ${resp.statusCode})');
+    }
+    return raw
+        .whereType<Map>()
+        .map((e) => WdgwarsTerritory.fromJson(e.cast<String, dynamic>()))
+        .where((t) => t.hull.length >= 3)
+        .toList();
   }
 
   /// Upload a CSV via the documented async endpoint (POST /api/v2/upload-csv),
@@ -204,6 +220,69 @@ class WdgwarsApi {
       raw is Map<String, dynamic> ? raw : <String, dynamic>{};
 
   void dispose() => _dio.close();
+}
+
+/// One gang's claimed area — convex hull of its captures.
+class WdgwarsTerritory {
+  const WdgwarsTerritory({
+    required this.gangId,
+    required this.name,
+    required this.color,
+    required this.members,
+    required this.points,
+    required this.rank,
+    required this.hull,
+  });
+
+  final int gangId;
+  final String name;
+  final Color color;
+  final int members;
+  final int points;
+  final int rank;
+  final List<LatLng> hull;
+
+  ({double minLat, double maxLat, double minLon, double maxLon}) get bounds {
+    var minLat = hull.first.latitude, maxLat = minLat;
+    var minLon = hull.first.longitude, maxLon = minLon;
+    for (final p in hull) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLon) minLon = p.longitude;
+      if (p.longitude > maxLon) maxLon = p.longitude;
+    }
+    return (minLat: minLat, maxLat: maxLat, minLon: minLon, maxLon: maxLon);
+  }
+
+  factory WdgwarsTerritory.fromJson(Map<String, dynamic> json) {
+    final hull = <LatLng>[];
+    final raw = json['hull'];
+    if (raw is List) {
+      for (final p in raw) {
+        if (p is List && p.length >= 2 && p[0] is num && p[1] is num) {
+          hull.add(LatLng((p[0] as num).toDouble(), (p[1] as num).toDouble()));
+        }
+      }
+    }
+    int asInt(dynamic v) => v is num ? v.toInt() : 0;
+    return WdgwarsTerritory(
+      gangId: asInt(json['gang_id']),
+      name: (json['name'] as String?) ?? '',
+      color: _parseHexColor(json['color'] as String?),
+      members: asInt(json['members']),
+      points: asInt(json['points']),
+      rank: asInt(json['rank']),
+      hull: hull,
+    );
+  }
+
+  static Color _parseHexColor(String? hex) {
+    if (hex == null) return const Color(0xFF8B5CF6);
+    final h = hex.replaceFirst('#', '');
+    final v = int.tryParse(h, radix: 16);
+    if (v == null) return const Color(0xFF8B5CF6);
+    return Color(h.length <= 6 ? (0xFF000000 | v) : v);
+  }
 }
 
 class WdgwarsApiException implements Exception {

@@ -491,6 +491,45 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     ];
   }
 
+  /// WDGWars gang territory hulls, culled to the visible viewport.
+  List<Widget> _territoryLayers(WdgwarsProvider wdg) {
+    if (!wdg.showTerritories || wdg.territories.isEmpty) return const [];
+
+    LatLngBounds? view;
+    try {
+      view = _mapController.camera.visibleBounds;
+    } catch (_) {
+      view = null;
+    }
+
+    final polygons = <Polygon>[];
+    for (final t in wdg.territories) {
+      final b = t.bounds;
+      if (view != null &&
+          (b.minLat > view.north ||
+              b.maxLat < view.south ||
+              b.minLon > view.east ||
+              b.maxLon < view.west)) {
+        continue;
+      }
+      polygons.add(Polygon(
+        points: t.hull,
+        color: t.color.withValues(alpha: 0.13),
+        borderColor: t.color.withValues(alpha: 0.75),
+        borderStrokeWidth: 1.4,
+        label: t.name.isEmpty ? null : t.name,
+        labelStyle: TextStyle(
+          color: t.color,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1,
+        ),
+      ));
+    }
+    if (polygons.isEmpty) return const [];
+    return [PolygonLayer(polygons: polygons)];
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
@@ -652,6 +691,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                           )
                       : null,
                 ),
+                ..._territoryLayers(ref.watch(wdgwarsProvider)),
                 if (detectionLayers.heat.isNotEmpty)
                   CircleLayer(circles: detectionLayers.heat),
                 ..._exclusionZoneLayers(),
@@ -2043,44 +2083,94 @@ class _MapStyleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    return PopupMenuButton<MapStyle>(
+    final wdg = ref.watch(wdgwarsProvider);
+    return PopupMenuButton<MapStyle?>(
       initialValue: mapStyle,
-      onSelected: (style) => ref.read(mapStyleProvider.notifier).setStyle(style),
+      onSelected: (style) {
+        if (style == null) {
+          ref.read(wdgwarsProvider).setShowTerritories(!wdg.showTerritories);
+        } else {
+          ref.read(mapStyleProvider.notifier).setStyle(style);
+        }
+      },
       offset: const Offset(0, 40),
       color: t.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: t.border),
       ),
-      itemBuilder: (_) => MapStyle.values.map((style) {
-        final selected = style == mapStyle;
-        return PopupMenuItem<MapStyle>(
-          value: style,
-          height: 36,
-          child: Row(
-            children: [
-              Icon(
-                style.isDark ? Icons.dark_mode : Icons.light_mode,
-                size: 14,
-                color: selected ? AppTheme.accent : t.textDim,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                style.label,
-                style: TextStyle(
-                  color: selected ? AppTheme.accent : t.textPrimary,
-                  fontSize: 12,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+      itemBuilder: (_) => [
+        ...MapStyle.values.map((style) {
+          final selected = style == mapStyle;
+          return PopupMenuItem<MapStyle?>(
+            value: style,
+            height: 36,
+            child: Row(
+              children: [
+                Icon(
+                  style.isDark ? Icons.dark_mode : Icons.light_mode,
+                  size: 14,
+                  color: selected ? AppTheme.accent : t.textDim,
                 ),
-              ),
-              if (selected) ...[
-                const Spacer(),
-                Icon(Icons.check, size: 14, color: AppTheme.accent),
+                const SizedBox(width: 8),
+                Text(
+                  style.label,
+                  style: TextStyle(
+                    color: selected ? AppTheme.accent : t.textPrimary,
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                  ),
+                ),
+                if (selected) ...[
+                  const Spacer(),
+                  Icon(Icons.check, size: 14, color: AppTheme.accent),
+                ],
               ],
-            ],
+            ),
+          );
+        }),
+        if (wdg.isLoggedIn) ...[
+          const PopupMenuDivider(height: 1),
+          PopupMenuItem<MapStyle?>(
+            value: null,
+            height: 36,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.flag,
+                  size: 14,
+                  color: wdg.showTerritories ? AppTheme.wdgwars : t.textDim,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'WDG TERRITORY',
+                  style: TextStyle(
+                    color: wdg.showTerritories
+                        ? AppTheme.wdgwars
+                        : t.textPrimary,
+                    fontSize: 12,
+                    fontWeight: wdg.showTerritories
+                        ? FontWeight.w700
+                        : FontWeight.w400,
+                  ),
+                ),
+                const Spacer(),
+                if (wdg.territoriesLoading)
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: AppTheme.wdgwars,
+                    ),
+                  )
+                else if (wdg.showTerritories)
+                  Icon(Icons.check, size: 14, color: AppTheme.wdgwars),
+              ],
+            ),
           ),
-        );
-      }).toList(),
+        ],
+      ],
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
