@@ -24,6 +24,8 @@ QueueHandle_t peerStatusQueue = NULL;
 
 volatile GpsData currentGps = {};
 volatile bool    gpsValid = false;
+
+bool hwGpsActive(void) { return false; }
 volatile bool    hwBuzzerEnabled = false;
 volatile uint8_t hwBuzzerVolume = 0;
 volatile bool    hwLedEnabled = false;

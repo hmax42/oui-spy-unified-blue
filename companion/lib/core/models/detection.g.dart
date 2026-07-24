@@ -94,6 +94,7 @@ _$FlockExtensionImpl _$$FlockExtensionImplFromJson(Map<String, dynamic> json) =>
     _$FlockExtensionImpl(
       isRaven: json['isRaven'] as bool? ?? false,
       ravenFirmware: json['ravenFirmware'] as String?,
+      signals: (json['signals'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$$FlockExtensionImplToJson(
@@ -101,6 +102,7 @@ Map<String, dynamic> _$$FlockExtensionImplToJson(
 ) => <String, dynamic>{
   'isRaven': instance.isRaven,
   'ravenFirmware': instance.ravenFirmware,
+  'signals': instance.signals,
 };
 
 _$OdidExtensionImpl _$$OdidExtensionImplFromJson(Map<String, dynamic> json) =>

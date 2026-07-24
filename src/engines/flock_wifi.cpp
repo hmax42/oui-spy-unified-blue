@@ -16,8 +16,14 @@ volatile bool g_flockExtendedOui = false;
 void flockSetExtendedOui(bool en) { g_flockExtendedOui = en; }
 bool flockGetExtendedOui(void) { return g_flockExtendedOui; }
 
-// Flock Wi-Fi cams known to operate on standard ISM channels only.
+// Flock Wi-Fi cams field-observed on 2.4GHz ISM (1/6/11). On C5 also sweep
+// UNII-1 + UNII-3 5GHz in case of 5GHz-capable cams; cams reply fast to probe.
+#ifdef OUISPY_DUAL_BAND
+static const uint8_t channels[] = {1, 6, 11, 36, 40, 44, 48, 149, 153, 157, 161, 165};
+#else
 static const uint8_t channels[] = {1, 6, 11};
+#endif
+static const int channelCount = sizeof(channels) / sizeof(channels[0]);
 static int channelIdx = 0;
 static unsigned long lastChannelHop = 0;
 static const unsigned long DWELL_MS = 350;
@@ -149,6 +155,7 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
     evt.timestamp_ms = millis();
     evt.method = method;
     evt.ext.flock.auth_mode = flockAuthCacheGet(matchMac);
+    evt.ext.flock.sig_mask = FLOCK_SIG_OUI;
     pushDetectionFromISR(&evt);
 }
 
@@ -174,12 +181,15 @@ static void flockWifiStart(void) {
         WiFi.mode(WIFI_STA);
     }
     wifiSnifferApplyPs();
+    wifiApplyRegdomain();
     wifiCoexRegister(wifiSnifferCb,
                      WIFI_PROMIS_FILTER_MASK_MGMT | WIFI_PROMIS_FILTER_MASK_DATA);
-    esp_wifi_set_channel(channels[0], WIFI_SECOND_CHAN_NONE);
+    channelIdx = 0;
+    while (channelIdx < channelCount - 1 && !wifiChanEnabled(channels[channelIdx])) channelIdx++;
+    esp_wifi_set_channel(channels[channelIdx], WIFI_SECOND_CHAN_NONE);
     lastChannelHop = millis();
     sendWildcardProbe();
-    Serial.println("[FLOCK-WIFI] Started (promiscuous ch1/6/11, wildcard probe)");
+    Serial.println("[FLOCK-WIFI] Started (promiscuous, wildcard probe)");
 }
 
 static void flockWifiStop(void) {
@@ -206,7 +216,10 @@ static void flockWifiLoop(void) {
     if (engineGetState(ENGINE_WARDRIVE) != ESTATE_DISABLED) return;
     if (!wifiCoexShouldHop(ENGINE_FLOCK_WIFI)) return;
     if (millis() - lastChannelHop >= DWELL_MS) {
-        channelIdx = (channelIdx + 1) % 3;
+        int guard = 0;
+        do {
+            channelIdx = (channelIdx + 1) % channelCount;
+        } while (!wifiChanEnabled(channels[channelIdx]) && ++guard < channelCount);
         esp_wifi_set_channel(channels[channelIdx], WIFI_SECOND_CHAN_NONE);
         lastChannelHop = millis();
         sendWildcardProbe();

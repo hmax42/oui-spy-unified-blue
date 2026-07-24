@@ -18,7 +18,7 @@ void foxhunterCheckWifiDevice(const uint8_t* mac, int rssi, uint8_t channel);
 
 /// ISR-safe: check 3 802.11 address fields against foxhunter target.
 /// Called from wardrive promiscuous callback (IRAM context).
-void IRAM_ATTR foxhunterCheckWifiDeviceISR(
+void foxhunterCheckWifiDeviceISR(
     const uint8_t* addr1, const uint8_t* addr2, const uint8_t* addr3,
     int rssi, uint8_t channel);
 

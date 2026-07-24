@@ -46,6 +46,10 @@ void engineLoopAll(void);
 // Process engine command from BLE queue
 void engineProcessCommand(const EngineCommand* cmd);
 
+// Apply a global WiFi band mask (WIFI_BAND_* bits) + restart active WiFi engines.
+// Shared by the BLE 0x1A command and the mesh MESH_CFG_KIND_WIFIBAND relay.
+void engineApplyWifiBand(uint8_t mask);
+
 void engineSetDenyMask(uint8_t mask);
 void engineStateConfigApply(const uint8_t* data, uint8_t len);
 
@@ -55,6 +59,7 @@ void engineStateConfigApply(const uint8_t* data, uint8_t len);
 // window expires, the origin engine is re-enabled.
 void engineSetAutoPcap(bool enabled);
 bool engineAutoPcapEnabled(void);
+bool engineAutoPcapPending(void);
 void engineSetAutoPcapDuration(uint16_t seconds);
 uint16_t engineGetAutoPcapDuration(void);
 void engineSetAutoPcapCooldown(uint16_t seconds);

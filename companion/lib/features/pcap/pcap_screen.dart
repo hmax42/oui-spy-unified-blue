@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/features/pcap/pcap_stats.dart';
@@ -22,6 +23,7 @@ class _PcapScreenState extends ConsumerState<PcapScreen> {
   PcapMode _mode = PcapMode.wifi;
   int _chanStart = 1;
   int _chanEnd = 11;
+  int _mode5g = 1;
   bool _toggling = false;
   String? _targetNode;
   PcapStats? _heldStats;
@@ -68,6 +70,7 @@ class _PcapScreenState extends ConsumerState<PcapScreen> {
     setState(() {
       _chanStart = (p.getInt('pcap_chanStart') ?? 1).clamp(1, 14);
       _chanEnd = (p.getInt('pcap_chanEnd') ?? 11).clamp(_chanStart, 14);
+      _mode5g = (p.getInt('pcap_mode5g') ?? 1).clamp(0, 2);
       final modeIdx = p.getInt('pcap_mode') ?? 0;
       _mode = modeIdx == 1 ? PcapMode.ble : PcapMode.wifi;
     });
@@ -78,6 +81,7 @@ class _PcapScreenState extends ConsumerState<PcapScreen> {
     await p.setInt('pcap_chanStart', _chanStart);
     await p.setInt('pcap_chanEnd', _chanEnd);
     await p.setInt('pcap_mode', _mode == PcapMode.ble ? 1 : 0);
+    await p.setInt('pcap_mode5g', _mode5g);
   }
 
   @override
@@ -133,6 +137,7 @@ class _PcapScreenState extends ConsumerState<PcapScreen> {
             mode: _mode == PcapMode.ble ? 1 : 0,
             channelStart: _chanStart,
             channelEnd: _chanEnd,
+            mode5g: _mode5g,
             targetNodeId: mgr ? target : null,
           );
       if (mounted) setState(() { _pendingStart = true; });
@@ -316,6 +321,30 @@ class _PcapScreenState extends ConsumerState<PcapScreen> {
                       _savePrefs();
                     },
                   ),
+                  if (ref.read(bleManagerProvider).board.toLowerCase().contains('c5')) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Text('5 GHz', style: Theme.of(context).textTheme.bodyMedium),
+                        const SizedBox(width: 12),
+                        DropdownButton<int>(
+                          value: _mode5g,
+                          onChanged: isCapturing
+                              ? null
+                              : (v) {
+                                  if (v == null) return;
+                                  setState(() => _mode5g = v);
+                                  _savePrefs();
+                                },
+                          items: const [
+                            DropdownMenuItem(value: 0, child: Text('Off')),
+                            DropdownMenuItem(value: 1, child: Text('Regular (non-DFS)')),
+                            DropdownMenuItem(value: 2, child: Text('+ DFS')),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 16),
                 if (activeMode == PcapMode.wifi)
@@ -791,6 +820,12 @@ class _SavedPcapsSectionState extends State<_SavedPcapsSection> {
             Text('SAVED CAPTURES',
                 style: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 2)),
             const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.open_in_full, size: 18),
+              color: t.textDim,
+              tooltip: 'Open capture library',
+              onPressed: () => context.push('/pcap/library'),
+            ),
             IconButton(
               icon: const Icon(Icons.refresh, size: 18),
               color: t.textDim,

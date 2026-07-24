@@ -28,20 +28,30 @@ static unsigned long lastBleScan = 0;
 static volatile uint8_t wardriveRadio = 0x03;
 
 static uint8_t channelStart = 1;
-static uint8_t channelEnd   = 11;
+static uint8_t channelEnd   = 14;
 static unsigned long lastChannelHop = 0;
+#ifdef OUISPY_DUAL_BAND
+static uint8_t wardrive24Mode = 0;
+#endif
 
 #ifdef OUISPY_DUAL_BAND
-static const uint8_t kDualBandChannels[] = {
-    1, 6, 11, 36, 40, 44, 48, 149, 153, 157, 161, 165
+static const uint8_t k5GhzChannels[] = {
+    36, 40, 44, 48, 52, 56, 60, 64,
+    100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144,
+    149, 153, 157, 161, 165
 };
 #endif
 
-static uint16_t priorityDwellMs = 350;
-static uint16_t normalDwellMs   = 150;
+static uint16_t priorityDwellMs = 300;
+static uint16_t normalDwellMs   = 110;
 
-static uint8_t  hopSchedule[32];
-static uint16_t hopDwellMs[32];
+#ifdef OUISPY_DUAL_BAND
+#define WD_MAX_HOPS 48
+#else
+#define WD_MAX_HOPS 32
+#endif
+static uint8_t  hopSchedule[WD_MAX_HOPS];
+static uint16_t hopDwellMs[WD_MAX_HOPS];
 static uint8_t  hopScheduleLen = 1;
 static uint8_t  hopIdx = 0;
 static uint8_t  currentChannel = 1;
@@ -53,7 +63,7 @@ static volatile uint32_t wifiLastNetMs = 0;
 #define MESH_RENDEZVOUS_DWELL_MS 40
 
 static bool isPriorityChannel(uint8_t ch) {
-    return ch == 1 || ch == 6 || ch == 11;
+    return ch == 1 || ch == 6 || ch == 11 || ch == 44 || ch == 149 || ch == 157;
 }
 
 static uint16_t scanDwellForChannel(uint8_t ch) {
@@ -63,26 +73,65 @@ static uint16_t scanDwellForChannel(uint8_t ch) {
 static void buildHopSchedule(void) {
     hopScheduleLen = 0;
 #ifdef OUISPY_DUAL_BAND
-    for (uint8_t i = 0; i < sizeof(kDualBandChannels) && hopScheduleLen < 32; i++) {
-        hopSchedule[hopScheduleLen] = kDualBandChannels[i];
-        hopDwellMs[hopScheduleLen] = scanDwellForChannel(kDualBandChannels[i]);
-        hopScheduleLen++;
+    {
+        uint8_t ch24[16]; uint8_t ch24n = 0;
+        if (wardrive24Mode == 1) {
+            const uint8_t p[3] = {1, 6, 11};
+            for (uint8_t k = 0; k < 3; k++)
+                if (p[k] >= channelStart && p[k] <= channelEnd) ch24[ch24n++] = p[k];
+        } else {
+            for (uint16_t c = channelStart; c <= channelEnd && ch24n < 16; c++)
+                ch24[ch24n++] = (uint8_t)c;
+        }
+        if (ch24n == 0) ch24[ch24n++] = channelStart;
+
+        const bool en24 = wifiChanEnabled(1);
+        const bool en5  = wifiChanEnabled(36);
+        if (en24 && en5) {
+            uint8_t i24 = 0, i5 = 0;
+            while (hopScheduleLen < WD_MAX_HOPS && (i5 < sizeof(k5GhzChannels) || i24 < ch24n)) {
+                if (i24 < ch24n) {
+                    hopSchedule[hopScheduleLen] = ch24[i24];
+                    hopDwellMs[hopScheduleLen] = scanDwellForChannel(ch24[i24]);
+                    hopScheduleLen++; i24++;
+                }
+                for (uint8_t b = 0; b < 2 && i5 < sizeof(k5GhzChannels) && hopScheduleLen < WD_MAX_HOPS; b++) {
+                    hopSchedule[hopScheduleLen] = k5GhzChannels[i5];
+                    hopDwellMs[hopScheduleLen] = scanDwellForChannel(k5GhzChannels[i5]);
+                    hopScheduleLen++; i5++;
+                }
+            }
+        } else if (en24) {
+            for (uint8_t k = 0; k < ch24n && hopScheduleLen < WD_MAX_HOPS; k++) {
+                hopSchedule[hopScheduleLen] = ch24[k];
+                hopDwellMs[hopScheduleLen] = scanDwellForChannel(ch24[k]);
+                hopScheduleLen++;
+            }
+        } else {
+            for (uint8_t i = 0; i < sizeof(k5GhzChannels) && hopScheduleLen < WD_MAX_HOPS; i++) {
+                hopSchedule[hopScheduleLen] = k5GhzChannels[i];
+                hopDwellMs[hopScheduleLen] = scanDwellForChannel(k5GhzChannels[i]);
+                hopScheduleLen++;
+            }
+        }
     }
 #else
-    for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < 32; c++) {
+    for (uint16_t c = channelStart; c <= channelEnd && hopScheduleLen < WD_MAX_HOPS; c++) {
         hopSchedule[hopScheduleLen] = (uint8_t)c;
         hopDwellMs[hopScheduleLen] = scanDwellForChannel((uint8_t)c);
         hopScheduleLen++;
     }
 #endif
+#ifndef OUISPY_DUAL_BAND
     const uint8_t kPri[3] = {1, 6, 11};
-    for (uint8_t i = 0; i < 3 && hopScheduleLen < 32; i++) {
-        if (kPri[i] >= channelStart && kPri[i] <= channelEnd) {
+    for (uint8_t i = 0; i < 3 && hopScheduleLen < WD_MAX_HOPS; i++) {
+        if (kPri[i] >= channelStart && kPri[i] <= channelEnd && wifiChanEnabled(kPri[i])) {
             hopSchedule[hopScheduleLen] = kPri[i];
             hopDwellMs[hopScheduleLen] = scanDwellForChannel(kPri[i]);
             hopScheduleLen++;
         }
     }
+#endif
     // Node mode: ensure the sweep visits the mesh channel (ch1) so ESP-NOW
     // rides the natural dwell instead of a forced scan-pausing park. ch1 is a
     // real, dense channel, so this dwell still logs networks. Skipped in solo
@@ -91,7 +140,7 @@ static void buildHopSchedule(void) {
         bool hasMeshCh = false;
         for (uint8_t i = 0; i < hopScheduleLen; i++)
             if (hopSchedule[i] == MESH_RENDEZVOUS_CH) { hasMeshCh = true; break; }
-        if (!hasMeshCh && hopScheduleLen < 32) {
+        if (!hasMeshCh && hopScheduleLen < WD_MAX_HOPS) {
             hopSchedule[hopScheduleLen] = MESH_RENDEZVOUS_CH;
             hopDwellMs[hopScheduleLen] = scanDwellForChannel(MESH_RENDEZVOUS_CH);
             hopScheduleLen++;
@@ -102,6 +151,11 @@ static void buildHopSchedule(void) {
         hopDwellMs[0] = scanDwellForChannel(channelStart);
         hopScheduleLen = 1;
     }
+#ifdef OUISPY_SWEEPLOG
+    Serial.printf("[WDSCHED] len=%u:", hopScheduleLen);
+    for (uint8_t i = 0; i < hopScheduleLen; i++) Serial.printf(" %u", hopSchedule[i]);
+    Serial.println();
+#endif
     hopIdx = 0;
     currentChannel = hopSchedule[0];
 }
@@ -303,6 +357,9 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
                 int bodyLen = len - bodyOff;
                 if (bodyLen > 0) {
                     int r = isWildcardProbeIE(p + bodyOff, bodyLen);
+                    if (r == -1 && bodyLen > 4) {
+                        r = isWildcardProbeIE(p + bodyOff, bodyLen - 4);
+                    }
                     if (r == 1) fMethod = METHOD_WILDCARD_PROBE;
                 }
             }
@@ -327,12 +384,14 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
                 fEvt.timestamp_ms = millis();
                 fEvt.method = fMethod;
                 fEvt.ext.flock.auth_mode = flockAuthCacheGet(fMac);
+                fEvt.ext.flock.sig_mask = FLOCK_SIG_OUI;
                 pushDetectionFromISR(&fEvt);
             }
         }
     }
 
     if (wdDetectorActive) {
+        detectorCheckWifiSignaturesISR(p, len, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
         detectorCheckWifiDeviceISR(addr2, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
         if (!(addr1[0] & 0x01)) {
             detectorCheckWifiDeviceISR(addr1, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
@@ -405,6 +464,7 @@ class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
 
         uint8_t mac[6];
         bleAddrToMac(dev->getAddress().getNative(), mac);
+        if (wdDetectorActive) detectorCheckBleSignatures(dev, mac, dev->getRSSI());
         if (wardriveDedup.check(mac)) return;
 
         int rssi = dev->getRSSI();
@@ -419,27 +479,40 @@ class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
             bool isRaven = false;
             const char* ravenFw = "";
             char tnSerial[20] = {0};
+            uint8_t sigMask = 0;
 
-            if (flockMatchOui(mac)) {
-                isFlock = true;
-                flockMethod = METHOD_OUI_MATCH;
-            }
-            if (!isFlock && name.length() > 0 && flockMatchNameStr(name.c_str())) {
-                isFlock = true;
-                flockMethod = METHOD_NAME_MATCH;
-            }
-            if (!isFlock && dev->haveManufacturerData()) {
+            if (dev->haveManufacturerData()) {
                 std::string md = dev->getManufacturerData();
                 if (flockMatchMfgPayload((const uint8_t*)md.data(), md.size(),
                                          tnSerial, sizeof(tnSerial))) {
-                    isFlock = true;
-                    flockMethod = METHOD_MFG_ID;
+                    sigMask |= FLOCK_SIG_MFG;
+                    if (tnSerial[0]) sigMask |= FLOCK_SIG_TN;
                 }
+            }
+            if (flockMatchOui(mac)) sigMask |= FLOCK_SIG_OUI;
+            if (name.length() > 0) {
+                if (flockMatchNameStr(name.c_str()))        sigMask |= FLOCK_SIG_NAME;
+                if (flockMatchBareSerialName(name.c_str())) sigMask |= FLOCK_SIG_SERIAL;
+            }
+
+            if (sigMask & FLOCK_SIG_OUI) {
+                isFlock = true;
+                flockMethod = METHOD_OUI_MATCH;
+            } else if (sigMask & FLOCK_SIG_NAME) {
+                isFlock = true;
+                flockMethod = METHOD_NAME_MATCH;
+            } else if ((sigMask & FLOCK_SIG_SERIAL) && (sigMask & FLOCK_SIG_MFG)) {
+                isFlock = true;
+                flockMethod = METHOD_NAME_MATCH;
+            } else if (sigMask & FLOCK_SIG_MFG) {
+                isFlock = true;
+                flockMethod = METHOD_MFG_ID;
             }
             if (!isFlock && flockMatchRavenUuid(dev, &ravenFw)) {
                 isFlock = true;
                 flockMethod = METHOD_RAVEN_UUID;
                 isRaven = true;
+                sigMask |= FLOCK_SIG_RAVEN_UUID;
             }
 
             if (isFlock) {
@@ -461,6 +534,7 @@ class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
                     strncpy(fEvt.ext.flock.name, name.c_str(),
                             sizeof(fEvt.ext.flock.name) - 1);
                 }
+                fEvt.ext.flock.sig_mask = sigMask;
                 pushDetection(&fEvt);
             }
         }
@@ -530,15 +604,7 @@ static void wardriveStart(void) {
             vTaskDelay(pdMS_TO_TICKS(50));
         }
 
-#ifndef OUISPY_DUAL_BAND
-        wifi_country_t country = {
-            .cc = "JP",
-            .schan = 1,
-            .nchan = 14,
-            .policy = WIFI_COUNTRY_POLICY_MANUAL
-        };
-        esp_wifi_set_country(&country);
-#endif
+        wifiApplyRegdomain();
 
         wifi_promiscuous_filter_t ctrl_filter = {
             .filter_mask = 0
@@ -580,13 +646,21 @@ static void wardriveStop(void) {
     if (pWardriveScan != nullptr) {
         bleCoexUnregister(&wardriveBleCallbacks);
         if (pWardriveScan->isScanning()) pWardriveScan->stop();
+#ifdef OUISPY_NIMBLE2
+        vTaskDelay(pdMS_TO_TICKS(100));
+#else
         vTaskDelay(pdMS_TO_TICKS(200));
+#endif
         pWardriveScan->clearResults();
         pWardriveScan = nullptr;
     }
 
     wifiCoexUnregister(wardriveWifiCb);
+#ifdef OUISPY_NIMBLE2
+    vTaskDelay(pdMS_TO_TICKS(40));
+#else
     vTaskDelay(pdMS_TO_TICKS(100));
+#endif
     if (meshIsEnabled()) {
         WiFi.disconnect(false, false);
         esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
@@ -699,6 +773,9 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
     uint8_t  prevStart = channelStart, prevEnd = channelEnd;
     uint16_t prevPri = priorityDwellMs, prevNorm = normalDwellMs;
     uint8_t  prevRadio = wardriveRadio;
+#ifdef OUISPY_DUAL_BAND
+    uint8_t  prev24Mode = wardrive24Mode;
+#endif
 
     uint8_t newRadio = payload[0] & 0x03;
     if (newRadio == 0) newRadio = 0x03;
@@ -726,6 +803,9 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
             channelEnd = ce;
         }
     }
+#ifdef OUISPY_DUAL_BAND
+    if (len >= 12) wardrive24Mode = payload[11] & 0x01;
+#endif
 
     if (wardriveActive && newRadio != prevRadio) {
         Serial.printf("[WARDRIVE] radio change 0x%02X->0x%02X while running — restart\n",
@@ -737,6 +817,9 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
 
     bool scheduleChanged = (channelStart != prevStart) || (channelEnd != prevEnd) ||
                            (priorityDwellMs != prevPri) || (normalDwellMs != prevNorm);
+#ifdef OUISPY_DUAL_BAND
+    scheduleChanged = scheduleChanged || (wardrive24Mode != prev24Mode);
+#endif
     if (scheduleChanged || !wardriveActive) {
         buildHopSchedule();
     } else {
@@ -747,11 +830,19 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
         wardriveRadio, channelStart, channelEnd,
         priorityDwellMs, normalDwellMs,
         bleScanDurationMs, bleScanIntervalMs);
+#ifdef OUISPY_DUAL_BAND
+    Serial.printf("[WARDRIVE] 2.4 mode=%s\n", wardrive24Mode ? "1/6/11" : "all");
+#endif
 }
 
 uint16_t wardriveGetBleScanDurationMs(void) { return bleScanDurationMs; }
 uint16_t wardriveGetBleScanIntervalMs(void) { return bleScanIntervalMs; }
 uint8_t  wardriveGetRadio(void) { return wardriveRadio; }
+
+void wardriveSetDwell(uint16_t pri, uint16_t norm) {
+    priorityDwellMs = pri < 50 ? 50 : pri;
+    normalDwellMs = norm < 50 ? 50 : norm;
+}
 
 void wardriveSetRadioMask(uint8_t mask) {
     uint8_t m = mask & 0x03;

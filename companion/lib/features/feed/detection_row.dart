@@ -414,6 +414,17 @@ class _DetailSummary extends StatelessWidget {
     if (detection.flock?.isRaven == true) {
       rows.add(_detailRow(context, 'Type', 'Raven (ext battery)'));
     }
+    final flockSigs = _flockSignalLabels(detection.flock);
+    if (flockSigs.isNotEmpty) {
+      rows.add(_detailRow(context, 'Signals', flockSigs.join(', ')));
+      rows.add(_detailRow(
+        context,
+        'Validated',
+        detection.flock!.isValidated
+            ? 'Yes — serial name + XUNTONG mfg + TN serial'
+            : 'No — needs XUNTONG mfg ID corroboration',
+      ));
+    }
     final odid = detection.odid;
     if (odid != null) {
       if (odid.uavId != null && odid.uavId!.isNotEmpty) {
@@ -702,6 +713,18 @@ String _headline(Detection d, String? manufacturer) {
   return d.macAddress.toUpperCase();
 }
 
+List<String> _flockSignalLabels(FlockExtension? flock) {
+  if (flock == null || flock.signals == 0) return const [];
+  return [
+    if (flock.hasSignal(FlockSignal.oui)) 'OUI',
+    if (flock.hasSignal(FlockSignal.name)) 'NAME',
+    if (flock.hasSignal(FlockSignal.serial)) 'SERIAL',
+    if (flock.hasSignal(FlockSignal.mfg)) 'XUNTONG',
+    if (flock.hasSignal(FlockSignal.tn)) 'TN',
+    if (flock.hasSignal(FlockSignal.ravenUuid)) 'RAVEN-UUID',
+  ];
+}
+
 String methodLabel(String method) => switch (method) {
   'oui_addr1' => 'ADDR1 (DST)',
   'oui_addr2' => 'ADDR2 (SRC)',
@@ -847,6 +870,17 @@ class _DetailLine extends StatelessWidget {
         tokens.add(_pipe());
         tokens.add(_mono(fw));
       }
+    }
+    if (detection.flock?.isValidated == true) {
+      tokens.add(_pipe());
+      tokens.add(Icon(Icons.verified_user, size: 12, color: AppTheme.success));
+      tokens.add(const SizedBox(width: 3));
+      tokens.add(Text('VALIDATED',
+          style: TextStyle(
+              color: AppTheme.success,
+              fontSize: 11,
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.w800)));
     }
     if (detection.unipwn != null) {
       tokens.add(_pipe());

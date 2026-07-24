@@ -47,10 +47,10 @@ extern volatile uint32_t g_engRawSeen;
 
 // Firmware version
 #ifndef FW_VERSION
-#define FW_VERSION     "0.4.9"
+#define FW_VERSION     "0.5.0"
 #endif
 #ifndef FW_VERSION_NUM
-#define FW_VERSION_NUM 0x000409
+#define FW_VERSION_NUM 0x000500
 #endif
 
 #ifndef OUISPY_BOARD
@@ -133,6 +133,17 @@ enum EngineState : uint8_t {
 #define METHOD_MFG_ID          2
 #define METHOD_RAVEN_UUID      3
 
+// Flock signal mask — every predicate that hit, not just the deciding one.
+// A bare 10-digit name (FLOCK_SIG_SERIAL) is not standalone evidence; it only
+// counts when corroborated by FLOCK_SIG_MFG.
+#define FLOCK_SIG_OUI          0x01
+#define FLOCK_SIG_NAME         0x02
+#define FLOCK_SIG_SERIAL       0x04
+#define FLOCK_SIG_MFG          0x08
+#define FLOCK_SIG_TN           0x10
+#define FLOCK_SIG_RAVEN_UUID   0x20
+#define FLOCK_SIG_VALIDATED    (FLOCK_SIG_SERIAL | FLOCK_SIG_MFG | FLOCK_SIG_TN)
+
 // Sky Spy methods
 #define METHOD_ODID_BLE        0
 #define METHOD_ODID_NAN        1
@@ -182,6 +193,7 @@ typedef struct __attribute__((packed)) {
             char    raven_fw[16];
             uint8_t auth_mode;
             char    name[32];
+            uint8_t sig_mask;
         } flock;
 
         // Sky Spy ODID
@@ -266,11 +278,15 @@ typedef struct __attribute__((packed)) {
 // Engine Command — from GATT write to engine task
 // ============================================================================
 typedef struct {
-    uint8_t  command;       // 0x01=enable, 0x00=disable, 0x10=config_update
+    uint8_t  command;       // 0x01=enable, 0x00=disable, 0x10=config_update, 0x1A=wifi_band
     uint8_t  engine_id;
     uint8_t  payload[64];
     uint8_t  payload_len;
 } EngineCommand;
+
+// Global WiFi band select (command 0x1A): payload[0] = WIFI_BAND_* bitmask
+// (bit0=2.4GHz, bit1=5GHz). engine_id ignored. Applies to all WiFi engines.
+#define ENGINE_CTRL_WIFI_BAND 0x1A
 
 // ============================================================================
 // Queues (extern, created in main.cpp)
@@ -473,6 +489,7 @@ typedef struct __attribute__((packed)) {
 #define MESH_CFG_KIND_FOXHUNTER 4
 #define MESH_CFG_KIND_ENGINE 5
 #define MESH_CFG_KIND_SIGMASK 6
+#define MESH_CFG_KIND_WIFIBAND 7   // data[0] = WIFI_BAND_* mask (bit0=2.4, bit1=5)
 #define MESH_CONFIG_MAX     32
 typedef struct __attribute__((packed)) {
     uint8_t  pkt_type;          // MESH_PKT_CONFIG
@@ -644,7 +661,7 @@ extern QueueHandle_t peerStatusQueue;  // MeshStatusPacket, depth 4
 // ============================================================================
 // Helper: push detection onto queue (ISR-safe variant available)
 // ============================================================================
-#ifdef OUISPY_ENGINE_DIAG
+#if defined(OUISPY_ENGINE_DIAG) || defined(OUISPY_ENGINE_MATRIX)
 extern volatile uint32_t g_diagDetCount[ENGINE_COUNT];
 #endif
 
@@ -655,7 +672,7 @@ extern volatile uint32_t g_diagDetCount[ENGINE_COUNT];
 
 static inline bool pushDetection(const DetectionEvent* evt) {
     if (detectionQueue == NULL) return false;
-#ifdef OUISPY_ENGINE_DIAG
+#if defined(OUISPY_ENGINE_DIAG) || defined(OUISPY_ENGINE_MATRIX)
     if (evt && evt->engine_id < ENGINE_COUNT) g_diagDetCount[evt->engine_id]++;
 #endif
     if (uxQueueSpacesAvailable(detectionQueue) <= DETQ_ISR_RESERVE) return false;
@@ -669,7 +686,7 @@ static inline void stampGps(DetectionEvent* evt) {
 
 static inline bool pushDetectionFromISR(const DetectionEvent* evt) {
     if (detectionQueue == NULL) return false;
-#ifdef OUISPY_ENGINE_DIAG
+#if defined(OUISPY_ENGINE_DIAG) || defined(OUISPY_ENGINE_MATRIX)
     if (evt && evt->engine_id < ENGINE_COUNT) g_diagDetCount[evt->engine_id]++;
 #endif
     BaseType_t wake = pdFALSE;

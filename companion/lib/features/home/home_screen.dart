@@ -7,6 +7,8 @@ import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
+import 'package:oui_spy/core/wigle/wigle_provider.dart';
+import 'package:oui_spy/core/wdgwars/wdgwars_provider.dart';
 import 'package:oui_spy/features/home/engine_card.dart';
 import 'package:oui_spy/features/home/status_bar.dart';
 import 'package:oui_spy/theme/app_theme.dart';
@@ -203,6 +205,8 @@ class _DisconnectedView extends ConsumerWidget {
                 child: _EnginePreviewRow(engine: e),
               ),
             ),
+            const SizedBox(height: 8),
+            const _WardriveAccountsStrip(),
           ],
         ),
       ),
@@ -467,6 +471,8 @@ class _ConnectedView extends ConsumerWidget {
 
           if (state.recentDetections.isNotEmpty)
             _RecentActivity(state: state),
+
+          const _WardriveAccountsStrip(),
               ],
             ),
           ),
@@ -905,7 +911,7 @@ String _spoolBreakdown(Map<String, int> byEngine) {
     'flockBle': 'flock',
     'flockWifi': 'flock',
     'skySpy': 'drone',
-    'detector': 'watchlist',
+    'detector': 'detector',
     'wardrive': 'wardrive',
     'foxhunter': 'foxhunt',
   };
@@ -957,6 +963,156 @@ class _SpoolBanner extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Icon(Icons.close, size: 16, color: t.textDim),
+        ],
+      ),
+    );
+  }
+}
+
+class _WardriveAccountsStrip extends ConsumerWidget {
+  const _WardriveAccountsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppTheme.of(context);
+    final wigle = ref.watch(wigleProvider);
+    final wdg = ref.watch(wdgwarsProvider);
+    if (!wigle.isLoggedIn && !wdg.isLoggedIn) return const SizedBox.shrink();
+
+    final rows = <Widget>[];
+    if (wigle.isLoggedIn) {
+      final s = wigle.stats;
+      rows.add(_AccountMiniRow(
+        icon: Icons.language,
+        color: AppTheme.wigle,
+        name: 'WiGLE',
+        detail: s == null
+            ? 'Loading…'
+            : '#${s.rank} · ${_fmt(s.discoveredWiFi)} WiFi · ${_fmt(s.discoveredBt)} BT',
+      ));
+    }
+    if (wdg.isLoggedIn) {
+      final s = wdg.stats;
+      rows.add(_AccountMiniRow(
+        icon: Icons.sports_esports,
+        color: AppTheme.wdgwars,
+        name: 'WDGWars',
+        detail: s == null
+            ? 'Loading…'
+            : '${_fmt(s.total)} devices${s.gang.isNotEmpty ? ' · ${s.gang}' : ''}',
+      ));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => context.go('/config'),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: t.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: t.border, width: 0.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 3,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: AppTheme.wdgwars.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'WARDRIVE ACCOUNTS',
+                    style: TextStyle(
+                      color: t.textSecondary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'FULL STATS',
+                    style: TextStyle(
+                      color: AppTheme.wdgwars.withValues(alpha: 0.9),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, size: 16,
+                      color: AppTheme.wdgwars.withValues(alpha: 0.9)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...rows,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _fmt(int count) {
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return '$count';
+  }
+}
+
+class _AccountMiniRow extends StatelessWidget {
+  const _AccountMiniRow({
+    required this.icon,
+    required this.color,
+    required this.name,
+    required this.detail,
+  });
+  final IconData icon;
+  final Color color;
+  final String name;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 64,
+            child: Text(
+              name,
+              style: TextStyle(
+                color: t.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              detail,
+              style: TextStyle(
+                color: t.textDim,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+            ),
+          ),
         ],
       ),
     );

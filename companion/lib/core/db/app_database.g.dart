@@ -1459,6 +1459,17 @@ class $DetectionsTable extends Detections
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _flockSignalsMeta = const VerificationMeta(
+    'flockSignals',
+  );
+  @override
+  late final GeneratedColumn<int> flockSignals = GeneratedColumn<int>(
+    'flock_signals',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _uavIdMeta = const VerificationMeta('uavId');
   @override
   late final GeneratedColumn<String> uavId = GeneratedColumn<String>(
@@ -1668,6 +1679,7 @@ class $DetectionsTable extends Detections
     count,
     isRaven,
     ravenFirmware,
+    flockSignals,
     uavId,
     operatorId,
     droneLat,
@@ -1862,6 +1874,15 @@ class $DetectionsTable extends Detections
         ravenFirmware.isAcceptableOrUnknown(
           data['raven_firmware']!,
           _ravenFirmwareMeta,
+        ),
+      );
+    }
+    if (data.containsKey('flock_signals')) {
+      context.handle(
+        _flockSignalsMeta,
+        flockSignals.isAcceptableOrUnknown(
+          data['flock_signals']!,
+          _flockSignalsMeta,
         ),
       );
     }
@@ -2074,6 +2095,10 @@ class $DetectionsTable extends Detections
         DriftSqlType.string,
         data['${effectivePrefix}raven_firmware'],
       ),
+      flockSignals: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}flock_signals'],
+      ),
       uavId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}uav_id'],
@@ -2171,6 +2196,7 @@ class Detection extends DataClass implements Insertable<Detection> {
   final int count;
   final bool? isRaven;
   final String? ravenFirmware;
+  final int? flockSignals;
   final String? uavId;
   final String? operatorId;
   final double? droneLat;
@@ -2211,6 +2237,7 @@ class Detection extends DataClass implements Insertable<Detection> {
     required this.count,
     this.isRaven,
     this.ravenFirmware,
+    this.flockSignals,
     this.uavId,
     this.operatorId,
     this.droneLat,
@@ -2271,6 +2298,9 @@ class Detection extends DataClass implements Insertable<Detection> {
     }
     if (!nullToAbsent || ravenFirmware != null) {
       map['raven_firmware'] = Variable<String>(ravenFirmware);
+    }
+    if (!nullToAbsent || flockSignals != null) {
+      map['flock_signals'] = Variable<int>(flockSignals);
     }
     if (!nullToAbsent || uavId != null) {
       map['uav_id'] = Variable<String>(uavId);
@@ -2366,6 +2396,9 @@ class Detection extends DataClass implements Insertable<Detection> {
       ravenFirmware: ravenFirmware == null && nullToAbsent
           ? const Value.absent()
           : Value(ravenFirmware),
+      flockSignals: flockSignals == null && nullToAbsent
+          ? const Value.absent()
+          : Value(flockSignals),
       uavId: uavId == null && nullToAbsent
           ? const Value.absent()
           : Value(uavId),
@@ -2446,6 +2479,7 @@ class Detection extends DataClass implements Insertable<Detection> {
       count: serializer.fromJson<int>(json['count']),
       isRaven: serializer.fromJson<bool?>(json['isRaven']),
       ravenFirmware: serializer.fromJson<String?>(json['ravenFirmware']),
+      flockSignals: serializer.fromJson<int?>(json['flockSignals']),
       uavId: serializer.fromJson<String?>(json['uavId']),
       operatorId: serializer.fromJson<String?>(json['operatorId']),
       droneLat: serializer.fromJson<double?>(json['droneLat']),
@@ -2493,6 +2527,7 @@ class Detection extends DataClass implements Insertable<Detection> {
       'count': serializer.toJson<int>(count),
       'isRaven': serializer.toJson<bool?>(isRaven),
       'ravenFirmware': serializer.toJson<String?>(ravenFirmware),
+      'flockSignals': serializer.toJson<int?>(flockSignals),
       'uavId': serializer.toJson<String?>(uavId),
       'operatorId': serializer.toJson<String?>(operatorId),
       'droneLat': serializer.toJson<double?>(droneLat),
@@ -2536,6 +2571,7 @@ class Detection extends DataClass implements Insertable<Detection> {
     int? count,
     Value<bool?> isRaven = const Value.absent(),
     Value<String?> ravenFirmware = const Value.absent(),
+    Value<int?> flockSignals = const Value.absent(),
     Value<String?> uavId = const Value.absent(),
     Value<String?> operatorId = const Value.absent(),
     Value<double?> droneLat = const Value.absent(),
@@ -2580,6 +2616,7 @@ class Detection extends DataClass implements Insertable<Detection> {
     ravenFirmware: ravenFirmware.present
         ? ravenFirmware.value
         : this.ravenFirmware,
+    flockSignals: flockSignals.present ? flockSignals.value : this.flockSignals,
     uavId: uavId.present ? uavId.value : this.uavId,
     operatorId: operatorId.present ? operatorId.value : this.operatorId,
     droneLat: droneLat.present ? droneLat.value : this.droneLat,
@@ -2638,6 +2675,9 @@ class Detection extends DataClass implements Insertable<Detection> {
       ravenFirmware: data.ravenFirmware.present
           ? data.ravenFirmware.value
           : this.ravenFirmware,
+      flockSignals: data.flockSignals.present
+          ? data.flockSignals.value
+          : this.flockSignals,
       uavId: data.uavId.present ? data.uavId.value : this.uavId,
       operatorId: data.operatorId.present
           ? data.operatorId.value
@@ -2695,6 +2735,7 @@ class Detection extends DataClass implements Insertable<Detection> {
           ..write('count: $count, ')
           ..write('isRaven: $isRaven, ')
           ..write('ravenFirmware: $ravenFirmware, ')
+          ..write('flockSignals: $flockSignals, ')
           ..write('uavId: $uavId, ')
           ..write('operatorId: $operatorId, ')
           ..write('droneLat: $droneLat, ')
@@ -2740,6 +2781,7 @@ class Detection extends DataClass implements Insertable<Detection> {
     count,
     isRaven,
     ravenFirmware,
+    flockSignals,
     uavId,
     operatorId,
     droneLat,
@@ -2784,6 +2826,7 @@ class Detection extends DataClass implements Insertable<Detection> {
           other.count == this.count &&
           other.isRaven == this.isRaven &&
           other.ravenFirmware == this.ravenFirmware &&
+          other.flockSignals == this.flockSignals &&
           other.uavId == this.uavId &&
           other.operatorId == this.operatorId &&
           other.droneLat == this.droneLat &&
@@ -2826,6 +2869,7 @@ class DetectionsCompanion extends UpdateCompanion<Detection> {
   final Value<int> count;
   final Value<bool?> isRaven;
   final Value<String?> ravenFirmware;
+  final Value<int?> flockSignals;
   final Value<String?> uavId;
   final Value<String?> operatorId;
   final Value<double?> droneLat;
@@ -2866,6 +2910,7 @@ class DetectionsCompanion extends UpdateCompanion<Detection> {
     this.count = const Value.absent(),
     this.isRaven = const Value.absent(),
     this.ravenFirmware = const Value.absent(),
+    this.flockSignals = const Value.absent(),
     this.uavId = const Value.absent(),
     this.operatorId = const Value.absent(),
     this.droneLat = const Value.absent(),
@@ -2907,6 +2952,7 @@ class DetectionsCompanion extends UpdateCompanion<Detection> {
     this.count = const Value.absent(),
     this.isRaven = const Value.absent(),
     this.ravenFirmware = const Value.absent(),
+    this.flockSignals = const Value.absent(),
     this.uavId = const Value.absent(),
     this.operatorId = const Value.absent(),
     this.droneLat = const Value.absent(),
@@ -2956,6 +3002,7 @@ class DetectionsCompanion extends UpdateCompanion<Detection> {
     Expression<int>? count,
     Expression<bool>? isRaven,
     Expression<String>? ravenFirmware,
+    Expression<int>? flockSignals,
     Expression<String>? uavId,
     Expression<String>? operatorId,
     Expression<double>? droneLat,
@@ -2997,6 +3044,7 @@ class DetectionsCompanion extends UpdateCompanion<Detection> {
       if (count != null) 'count': count,
       if (isRaven != null) 'is_raven': isRaven,
       if (ravenFirmware != null) 'raven_firmware': ravenFirmware,
+      if (flockSignals != null) 'flock_signals': flockSignals,
       if (uavId != null) 'uav_id': uavId,
       if (operatorId != null) 'operator_id': operatorId,
       if (droneLat != null) 'drone_lat': droneLat,
@@ -3040,6 +3088,7 @@ class DetectionsCompanion extends UpdateCompanion<Detection> {
     Value<int>? count,
     Value<bool?>? isRaven,
     Value<String?>? ravenFirmware,
+    Value<int?>? flockSignals,
     Value<String?>? uavId,
     Value<String?>? operatorId,
     Value<double?>? droneLat,
@@ -3081,6 +3130,7 @@ class DetectionsCompanion extends UpdateCompanion<Detection> {
       count: count ?? this.count,
       isRaven: isRaven ?? this.isRaven,
       ravenFirmware: ravenFirmware ?? this.ravenFirmware,
+      flockSignals: flockSignals ?? this.flockSignals,
       uavId: uavId ?? this.uavId,
       operatorId: operatorId ?? this.operatorId,
       droneLat: droneLat ?? this.droneLat,
@@ -3172,6 +3222,9 @@ class DetectionsCompanion extends UpdateCompanion<Detection> {
     if (ravenFirmware.present) {
       map['raven_firmware'] = Variable<String>(ravenFirmware.value);
     }
+    if (flockSignals.present) {
+      map['flock_signals'] = Variable<int>(flockSignals.value);
+    }
     if (uavId.present) {
       map['uav_id'] = Variable<String>(uavId.value);
     }
@@ -3249,6 +3302,7 @@ class DetectionsCompanion extends UpdateCompanion<Detection> {
           ..write('count: $count, ')
           ..write('isRaven: $isRaven, ')
           ..write('ravenFirmware: $ravenFirmware, ')
+          ..write('flockSignals: $flockSignals, ')
           ..write('uavId: $uavId, ')
           ..write('operatorId: $operatorId, ')
           ..write('droneLat: $droneLat, ')
@@ -9512,6 +9566,7 @@ typedef $$DetectionsTableCreateCompanionBuilder =
       Value<int> count,
       Value<bool?> isRaven,
       Value<String?> ravenFirmware,
+      Value<int?> flockSignals,
       Value<String?> uavId,
       Value<String?> operatorId,
       Value<double?> droneLat,
@@ -9554,6 +9609,7 @@ typedef $$DetectionsTableUpdateCompanionBuilder =
       Value<int> count,
       Value<bool?> isRaven,
       Value<String?> ravenFirmware,
+      Value<int?> flockSignals,
       Value<String?> uavId,
       Value<String?> operatorId,
       Value<double?> droneLat,
@@ -9725,6 +9781,11 @@ class $$DetectionsTableFilterComposer
 
   ColumnFilters<String> get ravenFirmware => $composableBuilder(
     column: $table.ravenFirmware,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get flockSignals => $composableBuilder(
+    column: $table.flockSignals,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9969,6 +10030,11 @@ class $$DetectionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get flockSignals => $composableBuilder(
+    column: $table.flockSignals,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get uavId => $composableBuilder(
     column: $table.uavId,
     builder: (column) => ColumnOrderings(column),
@@ -10182,6 +10248,11 @@ class $$DetectionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<int> get flockSignals => $composableBuilder(
+    column: $table.flockSignals,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get uavId =>
       $composableBuilder(column: $table.uavId, builder: (column) => column);
 
@@ -10340,6 +10411,7 @@ class $$DetectionsTableTableManager
                 Value<int> count = const Value.absent(),
                 Value<bool?> isRaven = const Value.absent(),
                 Value<String?> ravenFirmware = const Value.absent(),
+                Value<int?> flockSignals = const Value.absent(),
                 Value<String?> uavId = const Value.absent(),
                 Value<String?> operatorId = const Value.absent(),
                 Value<double?> droneLat = const Value.absent(),
@@ -10380,6 +10452,7 @@ class $$DetectionsTableTableManager
                 count: count,
                 isRaven: isRaven,
                 ravenFirmware: ravenFirmware,
+                flockSignals: flockSignals,
                 uavId: uavId,
                 operatorId: operatorId,
                 droneLat: droneLat,
@@ -10422,6 +10495,7 @@ class $$DetectionsTableTableManager
                 Value<int> count = const Value.absent(),
                 Value<bool?> isRaven = const Value.absent(),
                 Value<String?> ravenFirmware = const Value.absent(),
+                Value<int?> flockSignals = const Value.absent(),
                 Value<String?> uavId = const Value.absent(),
                 Value<String?> operatorId = const Value.absent(),
                 Value<double?> droneLat = const Value.absent(),
@@ -10462,6 +10536,7 @@ class $$DetectionsTableTableManager
                 count: count,
                 isRaven: isRaven,
                 ravenFirmware: ravenFirmware,
+                flockSignals: flockSignals,
                 uavId: uavId,
                 operatorId: operatorId,
                 droneLat: droneLat,

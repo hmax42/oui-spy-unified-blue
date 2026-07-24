@@ -27,6 +27,17 @@ static uint8_t pcapChanEnd   = 11;
 static uint16_t pcapDwellMs  = 250;
 static uint8_t pcapHopIdx    = 0;
 static uint8_t pcapCurChan   = 1;
+#ifdef OUISPY_DUAL_BAND
+static const uint8_t kPcap5g[] = {36, 40, 44, 48, 149, 153, 157, 161, 165};
+static const uint8_t kPcap5gDfs[] = {52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144};
+static uint8_t pcap5gMode = 1;
+#define PCAP_MAX_HOPS 48
+#else
+#define PCAP_MAX_HOPS 32
+#endif
+static uint8_t pcapHopList[PCAP_MAX_HOPS];
+static uint8_t pcapHopListLen = 0;
+static bool    pcapRendezvousInSet = false;
 static unsigned long pcapLastHop = 0;
 static unsigned long pcapStartedAt = 0;
 static unsigned long pcapLastStatsNotify = 0;
@@ -365,6 +376,29 @@ static void pcapInit(void) {
     Serial.println("[PCAP] Initialized");
 }
 
+static void pcapBuildHopList(void) {
+    pcapHopListLen = 0;
+    pcapRendezvousInSet = false;
+    for (uint8_t c = pcapChanStart; c <= pcapChanEnd && pcapHopListLen < PCAP_MAX_HOPS; c++) {
+        if (!wifiChanEnabled(c)) continue;
+        if (c == 1) pcapRendezvousInSet = true;
+        pcapHopList[pcapHopListLen++] = c;
+    }
+#ifdef OUISPY_DUAL_BAND
+    if (!engineAutoPcapPending() && pcap5gMode >= 1) {
+        for (uint8_t i = 0; i < sizeof(kPcap5g) && pcapHopListLen < PCAP_MAX_HOPS; i++) {
+            if (wifiChanEnabled(kPcap5g[i])) pcapHopList[pcapHopListLen++] = kPcap5g[i];
+        }
+        if (pcap5gMode >= 2) {
+            for (uint8_t i = 0; i < sizeof(kPcap5gDfs) && pcapHopListLen < PCAP_MAX_HOPS; i++) {
+                if (wifiChanEnabled(kPcap5gDfs[i])) pcapHopList[pcapHopListLen++] = kPcap5gDfs[i];
+            }
+        }
+    }
+#endif
+    if (pcapHopListLen == 0) { pcapHopList[0] = pcapChanStart; pcapHopListLen = 1; }
+}
+
 static void pcapStart(void) {
     if (pcapActive) return;
     if (!allocBuffers()) {
@@ -380,7 +414,8 @@ static void pcapStart(void) {
     pcapStartedAt = millis();
     pcapLastStatsNotify = 0;
     pcapHopIdx = 0;
-    pcapCurChan = pcapChanStart;
+    pcapBuildHopList();
+    pcapCurChan = pcapHopList[0];
     pcapLastHop = millis();
     pcapActive = true;
     pcapState = 1;
@@ -403,9 +438,7 @@ static void pcapStart(void) {
             WiFi.disconnect(false, false);
             vTaskDelay(pdMS_TO_TICKS(50));
         }
-        wifi_country_t country = { .cc = "JP", .schan = 1, .nchan = 14,
-                                    .policy = WIFI_COUNTRY_POLICY_MANUAL };
-        esp_wifi_set_country(&country);
+        wifiApplyRegdomain();
         wifiSnifferApplyPs();
         wifiCoexRegister(pcapWifiCb,
                          WIFI_PROMIS_FILTER_MASK_MGMT | WIFI_PROMIS_FILTER_MASK_DATA |
@@ -493,17 +526,14 @@ static void pcapLoop(void) {
 #endif
     if (pcapMode == PCAP_MODE_WIFI) {
         if (wifiCoexShouldHop(ENGINE_PCAP) && now - pcapLastHop >= pcapDwellMs) {
-            uint8_t span = (pcapChanEnd - pcapChanStart + 1);
-            if (span < 1) span = 1;
             const bool meshOn = meshIsEnabled();
-            const bool rendezvousInHopSet =
-                (pcapChanStart <= 1 && pcapChanEnd >= 1);
             const bool rendezvousNow = (pcapCurChan == 1);
-            if (meshOn && !rendezvousInHopSet && !rendezvousNow) {
+            if (meshOn && !pcapRendezvousInSet && !rendezvousNow) {
                 pcapCurChan = 1;
             } else {
                 pcapHopIdx++;
-                pcapCurChan = pcapChanStart + (pcapHopIdx % span);
+                if (pcapHopIdx >= pcapHopListLen) pcapHopIdx = 0;
+                pcapCurChan = pcapHopList[pcapHopIdx];
             }
             esp_wifi_set_channel(pcapCurChan, WIFI_SECOND_CHAN_NONE);
             pcapLastHop = now;
@@ -533,6 +563,9 @@ static void pcapConfig(const uint8_t* payload, uint8_t len) {
                 if (cs >= 1 && cs <= 14) pcapChanStart = cs;
                 if (ce >= pcapChanStart && ce <= 14) pcapChanEnd = ce;
             }
+#ifdef OUISPY_DUAL_BAND
+            if (len >= 6) pcap5gMode = payload[5] & 0x03;
+#endif
             break;
         case PCAP_CTRL_STOP:  pcapStop(); break;
         case 0x10:

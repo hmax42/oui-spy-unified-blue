@@ -12,6 +12,8 @@ struct OuiSpyLiveActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var mode: EngineMode
         var uniqueCount: Int
+        var wifiCount: Int = 0
+        var bleCount: Int = 0
         var flockCount: Int
         var droneCount: Int
         var detectorHits: Int
@@ -59,6 +61,8 @@ struct OuiSpyLiveActivityAttributes: ActivityAttributes {
         init(
             mode: EngineMode,
             uniqueCount: Int,
+            wifiCount: Int = 0,
+            bleCount: Int = 0,
             flockCount: Int,
             droneCount: Int,
             detectorHits: Int,
@@ -74,6 +78,8 @@ struct OuiSpyLiveActivityAttributes: ActivityAttributes {
         ) {
             self.mode = mode
             self.uniqueCount = uniqueCount
+            self.wifiCount = wifiCount
+            self.bleCount = bleCount
             self.flockCount = flockCount
             self.droneCount = droneCount
             self.detectorHits = detectorHits
@@ -91,8 +97,8 @@ struct OuiSpyLiveActivityAttributes: ActivityAttributes {
         // Backward-compatible decoder: tolerate ContentState payloads written
         // before `isImperial` was added (resumed Activities after app upgrade).
         private enum CodingKeys: String, CodingKey {
-            case mode, uniqueCount, flockCount, droneCount, detectorHits,
-                 distanceKm, speedKmh, targetMac, rssi, intervalMs,
+            case mode, uniqueCount, wifiCount, bleCount, flockCount, droneCount,
+                 detectorHits, distanceKm, speedKmh, targetMac, rssi, intervalMs,
                  robotType, exploitStatus, isImperial, activeLabel
         }
 
@@ -100,6 +106,8 @@ struct OuiSpyLiveActivityAttributes: ActivityAttributes {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             mode = try c.decode(EngineMode.self, forKey: .mode)
             uniqueCount = try c.decode(Int.self, forKey: .uniqueCount)
+            wifiCount = try c.decodeIfPresent(Int.self, forKey: .wifiCount) ?? 0
+            bleCount = try c.decodeIfPresent(Int.self, forKey: .bleCount) ?? 0
             flockCount = try c.decode(Int.self, forKey: .flockCount)
             droneCount = try c.decode(Int.self, forKey: .droneCount)
             detectorHits = try c.decode(Int.self, forKey: .detectorHits)

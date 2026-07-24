@@ -22,8 +22,18 @@ static unsigned long lastBeepTime = 0;
 static bool beepOn = false;
 static unsigned long beepOffAt = 0;
 
-// WiFi promiscuous — scan all channels 1-14.
+// WiFi promiscuous — 2.4GHz 1-14 + (C5) 5GHz UNII bands.
 // Channel hint from feed = start channel + extra dwell (priority), not a lock.
+#ifdef OUISPY_DUAL_BAND
+static const uint8_t fhChannels[] = {
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+    36, 40, 44, 48, 149, 153, 157, 161, 165
+};
+#else
+static const uint8_t fhChannels[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+#endif
+static const int fhChannelCount = sizeof(fhChannels) / sizeof(fhChannels[0]);
+static int fhChannelIdx = 0;
 static volatile bool wifiActive = false;
 static uint8_t hintChannel = 0;           // 0 = no hint, 1-14 = priority channel
 static uint8_t currentChannel = 1;
@@ -249,11 +259,19 @@ static void foxhunterStart(void) {
         // target frames 10-100x on busy networks; including them overloads
         // the ISR and drops the very frames foxhunter needs to track RSSI on.
         wifiSnifferApplyPs();
+        wifiApplyRegdomain();
         wifiCoexRegister(wifiSnifferCb,
                          WIFI_PROMIS_FILTER_MASK_MGMT | WIFI_PROMIS_FILTER_MASK_DATA);
-        uint8_t startCh = (hintChannel > 0) ? hintChannel : 1;
-        currentChannel = startCh;
-        esp_wifi_set_channel(startCh, WIFI_SECOND_CHAN_NONE);
+        uint8_t startCh = (hintChannel > 0) ? hintChannel : fhChannels[0];
+        fhChannelIdx = 0;
+        for (int i = 0; i < fhChannelCount; i++) {
+            if (fhChannels[i] == startCh) { fhChannelIdx = i; break; }
+        }
+        int g = 0;
+        while (!wifiChanEnabled(fhChannels[fhChannelIdx]) && ++g < fhChannelCount)
+            fhChannelIdx = (fhChannelIdx + 1) % fhChannelCount;
+        currentChannel = fhChannels[fhChannelIdx];
+        esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
         lastChannelHop = millis();
         wifiActive = true;
     }
@@ -333,8 +351,11 @@ static void foxhunterLoop(void) {
                           currentChannel == 1 || currentChannel == 6 || currentChannel == 11;
         uint16_t dwell = isPriority ? PRIORITY_DWELL_MS : NORMAL_DWELL_MS;
         if (wifiCoexShouldHop(ENGINE_FOXHUNTER) && millis() - lastChannelHop >= dwell) {
-            currentChannel++;
-            if (currentChannel > 14) currentChannel = 1;
+            int g = 0;
+            do {
+                fhChannelIdx = (fhChannelIdx + 1) % fhChannelCount;
+            } while (!wifiChanEnabled(fhChannels[fhChannelIdx]) && ++g < fhChannelCount);
+            currentChannel = fhChannels[fhChannelIdx];
             esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
             lastChannelHop = millis();
             if (meshIsEnabled() && currentChannel == 1) meshNoteOnHome();

@@ -839,6 +839,7 @@ FlockExtension _$FlockExtensionFromJson(Map<String, dynamic> json) {
 mixin _$FlockExtension {
   bool get isRaven => throw _privateConstructorUsedError;
   String? get ravenFirmware => throw _privateConstructorUsedError;
+  int get signals => throw _privateConstructorUsedError;
 
   /// Serializes this FlockExtension to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -857,7 +858,7 @@ abstract class $FlockExtensionCopyWith<$Res> {
     $Res Function(FlockExtension) then,
   ) = _$FlockExtensionCopyWithImpl<$Res, FlockExtension>;
   @useResult
-  $Res call({bool isRaven, String? ravenFirmware});
+  $Res call({bool isRaven, String? ravenFirmware, int signals});
 }
 
 /// @nodoc
@@ -874,7 +875,11 @@ class _$FlockExtensionCopyWithImpl<$Res, $Val extends FlockExtension>
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? isRaven = null, Object? ravenFirmware = freezed}) {
+  $Res call({
+    Object? isRaven = null,
+    Object? ravenFirmware = freezed,
+    Object? signals = null,
+  }) {
     return _then(
       _value.copyWith(
             isRaven: null == isRaven
@@ -885,6 +890,10 @@ class _$FlockExtensionCopyWithImpl<$Res, $Val extends FlockExtension>
                 ? _value.ravenFirmware
                 : ravenFirmware // ignore: cast_nullable_to_non_nullable
                       as String?,
+            signals: null == signals
+                ? _value.signals
+                : signals // ignore: cast_nullable_to_non_nullable
+                      as int,
           )
           as $Val,
     );
@@ -900,7 +909,7 @@ abstract class _$$FlockExtensionImplCopyWith<$Res>
   ) = __$$FlockExtensionImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({bool isRaven, String? ravenFirmware});
+  $Res call({bool isRaven, String? ravenFirmware, int signals});
 }
 
 /// @nodoc
@@ -916,7 +925,11 @@ class __$$FlockExtensionImplCopyWithImpl<$Res>
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? isRaven = null, Object? ravenFirmware = freezed}) {
+  $Res call({
+    Object? isRaven = null,
+    Object? ravenFirmware = freezed,
+    Object? signals = null,
+  }) {
     return _then(
       _$FlockExtensionImpl(
         isRaven: null == isRaven
@@ -927,6 +940,10 @@ class __$$FlockExtensionImplCopyWithImpl<$Res>
             ? _value.ravenFirmware
             : ravenFirmware // ignore: cast_nullable_to_non_nullable
                   as String?,
+        signals: null == signals
+            ? _value.signals
+            : signals // ignore: cast_nullable_to_non_nullable
+                  as int,
       ),
     );
   }
@@ -935,7 +952,11 @@ class __$$FlockExtensionImplCopyWithImpl<$Res>
 /// @nodoc
 @JsonSerializable()
 class _$FlockExtensionImpl implements _FlockExtension {
-  const _$FlockExtensionImpl({this.isRaven = false, this.ravenFirmware});
+  const _$FlockExtensionImpl({
+    this.isRaven = false,
+    this.ravenFirmware,
+    this.signals = 0,
+  });
 
   factory _$FlockExtensionImpl.fromJson(Map<String, dynamic> json) =>
       _$$FlockExtensionImplFromJson(json);
@@ -945,10 +966,13 @@ class _$FlockExtensionImpl implements _FlockExtension {
   final bool isRaven;
   @override
   final String? ravenFirmware;
+  @override
+  @JsonKey()
+  final int signals;
 
   @override
   String toString() {
-    return 'FlockExtension(isRaven: $isRaven, ravenFirmware: $ravenFirmware)';
+    return 'FlockExtension(isRaven: $isRaven, ravenFirmware: $ravenFirmware, signals: $signals)';
   }
 
   @override
@@ -958,12 +982,13 @@ class _$FlockExtensionImpl implements _FlockExtension {
             other is _$FlockExtensionImpl &&
             (identical(other.isRaven, isRaven) || other.isRaven == isRaven) &&
             (identical(other.ravenFirmware, ravenFirmware) ||
-                other.ravenFirmware == ravenFirmware));
+                other.ravenFirmware == ravenFirmware) &&
+            (identical(other.signals, signals) || other.signals == signals));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, isRaven, ravenFirmware);
+  int get hashCode => Object.hash(runtimeType, isRaven, ravenFirmware, signals);
 
   /// Create a copy of FlockExtension
   /// with the given fields replaced by the non-null parameter values.
@@ -986,6 +1011,7 @@ abstract class _FlockExtension implements FlockExtension {
   const factory _FlockExtension({
     final bool isRaven,
     final String? ravenFirmware,
+    final int signals,
   }) = _$FlockExtensionImpl;
 
   factory _FlockExtension.fromJson(Map<String, dynamic> json) =
@@ -995,6 +1021,8 @@ abstract class _FlockExtension implements FlockExtension {
   bool get isRaven;
   @override
   String? get ravenFirmware;
+  @override
+  int get signals;
 
   /// Create a copy of FlockExtension
   /// with the given fields replaced by the non-null parameter values.

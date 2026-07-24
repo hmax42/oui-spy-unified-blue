@@ -4,6 +4,7 @@
 #include "engine_registry.h"
 #include "engines/pcap.h"
 #include "mesh_espnow.h"
+#include "radio_coex.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <Preferences.h>
@@ -129,10 +130,12 @@ void engineDisableAll(void) {
         states[i] = ESTATE_DISABLED;
     }
     // Force-stop any lingering BLE scan to free the radio for GATT
-    NimBLEScan* scan = NimBLEDevice::getScan();
-    if (scan && scan->isScanning()) {
-        scan->stop();
-        Serial.println("[ENGINE] Force-stopped BLE scan");
+    if (NimBLEDevice::getInitialized()) {
+        NimBLEScan* scan = NimBLEDevice::getScan();
+        if (scan && scan->isScanning()) {
+            scan->stop();
+            Serial.println("[ENGINE] Force-stopped BLE scan");
+        }
     }
     Serial.println("[ENGINE] All engines disabled");
     if (engineMux) xSemaphoreGiveRecursive(engineMux);
@@ -289,6 +292,7 @@ void engineSetAutoPcap(bool en) {
     autoPcapSave();
 }
 bool engineAutoPcapEnabled(void) { return autoPcapEnabled; }
+bool engineAutoPcapPending(void) { return autoPcapPending; }
 void engineSetAutoPcapDuration(uint16_t s) {
     uint16_t v = (s == 0 ? 10 : s);
     if (autoPcapDurationSec == v) return;
@@ -544,6 +548,28 @@ void engineProcessCommand(const EngineCommand* cmd) {
                 engines[cmd->engine_id]->config(cmd->payload, cmd->payload_len);
             }
             break;
+        case ENGINE_CTRL_WIFI_BAND: // 0x1A global WiFi band select
+            engineApplyWifiBand((cmd->payload_len >= 1) ? cmd->payload[0]
+                                                        : (WIFI_BAND_24 | WIFI_BAND_5));
+            break;
+    }
+}
+
+void engineApplyWifiBand(uint8_t mask) {
+    if (mask == wifiGetBandMask()) return;
+    wifiSetBandMask(mask);
+    Serial.printf("[ENGINE] wifi band mask=0x%02X — restarting active WiFi engines\n",
+                  wifiGetBandMask());
+    static const EngineId wifiEngines[] = {
+        ENGINE_WARDRIVE, ENGINE_SKYSPY, ENGINE_PCAP,
+        ENGINE_DETECTOR, ENGINE_FLOCK_WIFI, ENGINE_FOXHUNTER
+    };
+    for (unsigned i = 0; i < sizeof(wifiEngines) / sizeof(wifiEngines[0]); i++) {
+        EngineId id = wifiEngines[i];
+        if (states[id] != ESTATE_DISABLED) {
+            engineDisable(id);
+            engineEnable(id);
+        }
     }
 }
 

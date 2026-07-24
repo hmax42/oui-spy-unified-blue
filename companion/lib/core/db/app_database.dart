@@ -9,6 +9,35 @@ import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
+/// Aggregate stats over all collected detections (for the Wardrive config tab).
+class CollectionStats {
+  CollectionStats({
+    required this.totalUnique,
+    required this.wifiUnique,
+    required this.bleUnique,
+    required this.totalDetections,
+    required this.sessionCount,
+    required this.ssidCount,
+    required this.channelCounts,
+    required this.authCounts,
+    required this.ouiCounts,
+    required this.flockOuiCounts,
+  });
+
+  final int totalUnique;
+  final int wifiUnique;
+  final int bleUnique;
+  final int totalDetections;
+  final int sessionCount;
+  final int ssidCount;
+  final Map<int, int> channelCounts;
+  final Map<int, int> authCounts;
+  final List<MapEntry<String, int>> ouiCounts;
+  final List<MapEntry<String, int>> flockOuiCounts;
+
+  bool get isEmpty => totalUnique == 0;
+}
+
 @DriftDatabase(tables: [
   Nodes,
   Sessions,
@@ -29,7 +58,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -54,6 +83,9 @@ class AppDatabase extends _$AppDatabase {
           if (existing.isEmpty) {
             await m.createTable(wigleUploads);
           }
+        }
+        if (from < 6) {
+          await m.addColumn(detections, detections.flockSignals);
         }
       },
     );
@@ -170,6 +202,9 @@ class AppDatabase extends _$AppDatabase {
               'pilotLat': r.pilotLat,
               'pilotLon': r.pilotLon,
               'approxGps': r.approxGps,
+              'isRaven': r.isRaven,
+              'ravenFirmware': r.ravenFirmware,
+              'flockSignals': r.flockSignals,
             })
         .toList();
   }
@@ -233,6 +268,63 @@ class AppDatabase extends _$AppDatabase {
     return (wifi: wifi, ble: ble);
   }
 
+  /// Aggregate collection stats across every completed session.
+  Future<CollectionStats> wardriveCollectionStats() async {
+    final totals = await customSelect(
+      "SELECT "
+      "(SELECT COUNT(DISTINCT mac_address) FROM detections) AS total_unique, "
+      "(SELECT COUNT(DISTINCT mac_address) FROM detections WHERE detection_method='wifi_ap') AS wifi_unique, "
+      "(SELECT COUNT(DISTINCT mac_address) FROM detections WHERE detection_method='ble_adv') AS ble_unique, "
+      "(SELECT COUNT(*) FROM detections) AS total_dets, "
+      "(SELECT COUNT(*) FROM sessions WHERE ended_at IS NOT NULL) AS session_count, "
+      "(SELECT COUNT(DISTINCT ssid) FROM detections WHERE detection_method='wifi_ap' AND ssid != '') AS ssid_count",
+    ).getSingle();
+
+    final chanRows = await customSelect(
+      "SELECT channel AS ch, COUNT(DISTINCT mac_address) AS c FROM detections "
+      "WHERE detection_method='wifi_ap' AND channel BETWEEN 1 AND 177 "
+      "GROUP BY channel ORDER BY channel",
+    ).get();
+
+    final authRows = await customSelect(
+      "SELECT auth_mode AS a, COUNT(DISTINCT mac_address) AS c FROM detections "
+      "WHERE detection_method='wifi_ap' GROUP BY auth_mode",
+    ).get();
+
+    final ouiRows = await customSelect(
+      "SELECT UPPER(SUBSTR(mac_address,1,8)) AS oui, COUNT(DISTINCT mac_address) AS c "
+      "FROM detections WHERE mac_address != '' GROUP BY oui ORDER BY c DESC LIMIT 300",
+    ).get();
+
+    final flockOuiRows = await customSelect(
+      "SELECT UPPER(SUBSTR(mac_address,1,8)) AS oui, COUNT(DISTINCT mac_address) AS c "
+      "FROM detections WHERE engine IN ('flockBle','flockWifi') AND mac_address != '' "
+      "GROUP BY oui ORDER BY c DESC LIMIT 80",
+    ).get();
+
+    return CollectionStats(
+      totalUnique: totals.read<int>('total_unique'),
+      wifiUnique: totals.read<int>('wifi_unique'),
+      bleUnique: totals.read<int>('ble_unique'),
+      totalDetections: totals.read<int>('total_dets'),
+      sessionCount: totals.read<int>('session_count'),
+      ssidCount: totals.read<int>('ssid_count'),
+      channelCounts: {
+        for (final r in chanRows) r.read<int>('ch'): r.read<int>('c'),
+      },
+      authCounts: {
+        for (final r in authRows) r.read<int>('a'): r.read<int>('c'),
+      },
+      ouiCounts: [
+        for (final r in ouiRows) MapEntry(r.read<String>('oui'), r.read<int>('c')),
+      ],
+      flockOuiCounts: [
+        for (final r in flockOuiRows)
+          MapEntry(r.read<String>('oui'), r.read<int>('c')),
+      ],
+    );
+  }
+
   /// Get all distinct MACs seen across all sessions for stalking detection.
   Future<List<String>> macSeenInMultipleSessions(int minSessions) async {
     final mac = detections.macAddress;
@@ -294,6 +386,68 @@ class AppDatabase extends _$AppDatabase {
       e['transports'] = (e['transports'] as Set<String>).toList()..sort();
     }
     return seen.values.toList();
+  }
+
+  /// Full-history detection search (MAC / name / SSID / method / node).
+  Future<List<Map<String, dynamic>>> searchDetectionMaps(
+    String query, {
+    int limit = 2000,
+  }) async {
+    final q = query.trim();
+    if (q.isEmpty) return const [];
+    final like = '%${q.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%';
+    final rows = await customSelect(
+      'SELECT * FROM detections WHERE '
+      'mac_address LIKE ?1 ESCAPE \'\\\' OR '
+      'device_name LIKE ?1 ESCAPE \'\\\' OR '
+      'ssid LIKE ?1 ESCAPE \'\\\' OR '
+      'detection_method LIKE ?1 ESCAPE \'\\\' OR '
+      'node_id LIKE ?1 ESCAPE \'\\\' '
+      'ORDER BY app_timestamp DESC LIMIT ?2',
+      variables: [Variable.withString(like), Variable.withInt(limit)],
+      readsFrom: {detections},
+    ).get();
+
+    return rows.map((r) {
+      final d = detections.map(r.data);
+      return {
+        'id': d.id,
+        'sessionId': d.sessionId,
+        'nodeId': d.nodeId,
+        'macAddress': d.macAddress,
+        'deviceName': d.deviceName,
+        'engine': d.engine,
+        'detectionMethod': d.detectionMethod,
+        'rssi': d.rssi,
+        'channel': d.channel,
+        'deviceTimestampMs': d.deviceTimestampMs,
+        'appTimestamp': d.appTimestamp,
+        'ssid': d.ssid,
+        'authMode': d.authMode,
+        'count': d.count,
+        'latitude': d.latitude,
+        'longitude': d.longitude,
+        'altitude': d.altitude,
+        'speed': d.speed,
+        'heading': d.heading,
+        'accuracy': d.accuracy,
+        'satelliteCount': d.satelliteCount,
+        'uavId': d.uavId,
+        'operatorId': d.operatorId,
+        'droneLat': d.droneLat,
+        'droneLon': d.droneLon,
+        'altitudeMsl': d.altitudeMsl,
+        'heightAgl': d.heightAgl,
+        'droneSpeed': d.droneSpeed,
+        'droneHeading': d.droneHeading,
+        'pilotLat': d.pilotLat,
+        'pilotLon': d.pilotLon,
+        'approxGps': d.approxGps,
+        'isRaven': d.isRaven,
+        'ravenFirmware': d.ravenFirmware,
+        'flockSignals': d.flockSignals,
+      };
+    }).toList();
   }
 
   /// Delete a single detection by its primary key.

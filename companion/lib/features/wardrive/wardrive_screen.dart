@@ -27,6 +27,7 @@ import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/drone_grouping.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/core/wigle/wigle_provider.dart';
+import 'package:oui_spy/core/wdgwars/wdgwars_provider.dart';
 import 'package:oui_spy/features/feed/detection_row.dart';
 import 'package:oui_spy/features/wardrive/drone_markers.dart';
 import 'package:oui_spy/features/geofence/geofence_screen.dart';
@@ -55,9 +56,13 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   double _statsHeight = 0;
   final _completedBarKey = GlobalKey();
   double _completedBarHeight = 0;
+  final _chipsKey = GlobalKey();
+  double _chipsHeight = 0;
   double _currentZoom = 15;
   double _currentRotation = 0;
   double _povHeading = double.nan;
+  _DetectionLayers? _cachedLayers;
+  String _cachedLayersKey = '';
   List<Geofence> _exclusionZones = [];
   bool _priming = false;
 
@@ -486,6 +491,45 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     ];
   }
 
+  /// WDGWars gang territory hulls, culled to the visible viewport.
+  List<Widget> _territoryLayers(WdgwarsProvider wdg) {
+    if (!wdg.showTerritories || wdg.territories.isEmpty) return const [];
+
+    LatLngBounds? view;
+    try {
+      view = _mapController.camera.visibleBounds;
+    } catch (_) {
+      view = null;
+    }
+
+    final polygons = <Polygon>[];
+    for (final t in wdg.territories) {
+      final b = t.bounds;
+      if (view != null &&
+          (b.minLat > view.north ||
+              b.maxLat < view.south ||
+              b.minLon > view.east ||
+              b.maxLon < view.west)) {
+        continue;
+      }
+      polygons.add(Polygon(
+        points: t.hull,
+        color: t.color.withValues(alpha: 0.13),
+        borderColor: t.color.withValues(alpha: 0.75),
+        borderStrokeWidth: 1.4,
+        label: t.name.isEmpty ? null : t.name,
+        labelStyle: TextStyle(
+          color: t.color,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1,
+        ),
+      ));
+    }
+    if (polygons.isEmpty) return const [];
+    return [PolygonLayer(polygons: polygons)];
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
@@ -647,6 +691,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                           )
                       : null,
                 ),
+                ..._territoryLayers(ref.watch(wdgwarsProvider)),
                 if (detectionLayers.heat.isNotEmpty)
                   CircleLayer(circles: detectionLayers.heat),
                 ..._exclusionZoneLayers(),
@@ -827,24 +872,63 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                 ),
               ),
 
+            if (wd.radioTransition != null)
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: Container(
+                  color: t.background.withValues(alpha: 0.96),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppTheme.accent),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        wd.radioTransition == 'stopping'
+                            ? 'RADIO SHUTTING DOWN…'
+                            : 'RADIO STARTING UP…',
+                        style: const TextStyle(
+                          color: AppTheme.accent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             Positioned(
               top: (wd.isActive
                       ? _statsHeight
                       : (wd.hasSessionData ? _completedBarHeight : 0)) +
                   8,
               left: 0, right: 0,
-              child: Center(
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    for (final m in WardriveController.selectableTargets)
-                      if (m != WardriveTarget.wigle &&
-                          ((wd.isActive && wd.isTargetSelected(m)) ||
-                              _targetEngineRunning(appEngines, m)))
-                        _ScanningPill(color: m.color, label: m.label),
-                  ],
+              child: _MeasuredBox(
+                statsKey: _chipsKey,
+                onHeightChanged: (h) {
+                  if ((_chipsHeight - h).abs() > 1) {
+                    setState(() => _chipsHeight = h);
+                  }
+                },
+                child: Center(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      for (final m in WardriveController.selectableTargets)
+                        if (m != WardriveTarget.wigle &&
+                            ((wd.isActive && wd.isTargetSelected(m)) ||
+                                _targetEngineRunning(appEngines, m)))
+                          _ScanningPill(color: m.color, label: m.label),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -898,10 +982,11 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                 ),
               ),
 
-            // Active: focus button (top-right, below stats)
+            // Active: focus button (top-right, below stats + chip rows)
             if (wd.isActive)
               Positioned(
-                top: _statsHeight + 8, right: 12,
+                top: _statsHeight + 8 + _chipsHeight + 8,
+                right: 12,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -1009,6 +1094,17 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   }
 
   _DetectionLayers _buildDetectionLayers(WardriveController wd, WardriveThemeData wt) {
+    final recentLen = ref.read(appStateProvider).recentDetections.length;
+    final key = '${wd.dedupedDetections.length}|$recentLen|${wd.flockFilter}|'
+        '${wd.detectorFilter}|${_currentZoom.toStringAsFixed(1)}|${wd.sessionId}';
+    if (_cachedLayersKey == key && _cachedLayers != null) return _cachedLayers!;
+    final layers = _computeDetectionLayers(wd, wt);
+    _cachedLayers = layers;
+    _cachedLayersKey = key;
+    return layers;
+  }
+
+  _DetectionLayers _computeDetectionLayers(WardriveController wd, WardriveThemeData wt) {
     final appState = ref.read(appStateProvider);
     final source = <Detection>[...wd.dedupedDetections];
     final seenKeys = <String>{
@@ -1444,6 +1540,9 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   }
 
   Widget _runControls(WidgetRef ref, WardriveController wd) {
+    if (wd.radioTransition != null) {
+      return const SizedBox.shrink();
+    }
     return switch (wd.state) {
       WardriveState.idle => const SizedBox.shrink(),
       WardriveState.running => Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1984,44 +2083,94 @@ class _MapStyleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    return PopupMenuButton<MapStyle>(
+    final wdg = ref.watch(wdgwarsProvider);
+    return PopupMenuButton<MapStyle?>(
       initialValue: mapStyle,
-      onSelected: (style) => ref.read(mapStyleProvider.notifier).setStyle(style),
+      onSelected: (style) {
+        if (style == null) {
+          ref.read(wdgwarsProvider).setShowTerritories(!wdg.showTerritories);
+        } else {
+          ref.read(mapStyleProvider.notifier).setStyle(style);
+        }
+      },
       offset: const Offset(0, 40),
       color: t.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: t.border),
       ),
-      itemBuilder: (_) => MapStyle.values.map((style) {
-        final selected = style == mapStyle;
-        return PopupMenuItem<MapStyle>(
-          value: style,
-          height: 36,
-          child: Row(
-            children: [
-              Icon(
-                style.isDark ? Icons.dark_mode : Icons.light_mode,
-                size: 14,
-                color: selected ? AppTheme.accent : t.textDim,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                style.label,
-                style: TextStyle(
-                  color: selected ? AppTheme.accent : t.textPrimary,
-                  fontSize: 12,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+      itemBuilder: (_) => [
+        ...MapStyle.values.map((style) {
+          final selected = style == mapStyle;
+          return PopupMenuItem<MapStyle?>(
+            value: style,
+            height: 36,
+            child: Row(
+              children: [
+                Icon(
+                  style.isDark ? Icons.dark_mode : Icons.light_mode,
+                  size: 14,
+                  color: selected ? AppTheme.accent : t.textDim,
                 ),
-              ),
-              if (selected) ...[
-                const Spacer(),
-                Icon(Icons.check, size: 14, color: AppTheme.accent),
+                const SizedBox(width: 8),
+                Text(
+                  style.label,
+                  style: TextStyle(
+                    color: selected ? AppTheme.accent : t.textPrimary,
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                  ),
+                ),
+                if (selected) ...[
+                  const Spacer(),
+                  Icon(Icons.check, size: 14, color: AppTheme.accent),
+                ],
               ],
-            ],
+            ),
+          );
+        }),
+        if (wdg.isLoggedIn) ...[
+          const PopupMenuDivider(height: 1),
+          PopupMenuItem<MapStyle?>(
+            value: null,
+            height: 36,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.flag,
+                  size: 14,
+                  color: wdg.showTerritories ? AppTheme.wdgwars : t.textDim,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'WDG TERRITORY',
+                  style: TextStyle(
+                    color: wdg.showTerritories
+                        ? AppTheme.wdgwars
+                        : t.textPrimary,
+                    fontSize: 12,
+                    fontWeight: wdg.showTerritories
+                        ? FontWeight.w700
+                        : FontWeight.w400,
+                  ),
+                ),
+                const Spacer(),
+                if (wdg.territoriesLoading)
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: AppTheme.wdgwars,
+                    ),
+                  )
+                else if (wdg.showTerritories)
+                  Icon(Icons.check, size: 14, color: AppTheme.wdgwars),
+              ],
+            ),
           ),
-        );
-      }).toList(),
+        ],
+      ],
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -2543,9 +2692,12 @@ class _CompletedSessionBarState extends ConsumerState<_CompletedSessionBar> {
     final t = AppTheme.of(context);
     final units = ref.watch(unitSystemProvider);
     final wigle = ref.watch(wigleProvider);
+    final wdg = ref.watch(wdgwarsProvider);
     final sid = wd.lastCompletedSessionId ?? wd.sessionId;
     final isUploaded = wigle.isUploaded(sid);
     final isUploading = wigle.isUploading(sid);
+    final wdgUploaded = wdg.isUploaded(sid);
+    final wdgUploading = wdg.isUploading(sid);
     final flockDets = wd.flockDetections;
     final detectorDets = wd.detectorDetections;
 
@@ -2790,6 +2942,55 @@ class _CompletedSessionBarState extends ConsumerState<_CompletedSessionBar> {
                           isUploaded ? 'SENT' : 'WIGLE',
                           style: TextStyle(
                             color: isUploaded ? AppTheme.success : AppTheme.warning,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700, letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (wdg.isLoggedIn) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: wdgUploaded || wdgUploading
+                      ? null
+                      : () => _uploadToWdgwars(context, ref, sid),
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 48, minHeight: 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: (wdgUploaded ? AppTheme.success : AppTheme.wdgwars)
+                          .withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: (wdgUploaded ? AppTheme.success : AppTheme.wdgwars)
+                            .withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (wdgUploading)
+                          const SizedBox(
+                            width: 12, height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5, color: AppTheme.wdgwars,
+                            ),
+                          )
+                        else
+                          Icon(
+                            wdgUploaded ? Icons.cloud_done : Icons.sports_esports,
+                            size: 14,
+                            color: wdgUploaded ? AppTheme.success : AppTheme.wdgwars,
+                          ),
+                        const SizedBox(width: 4),
+                        Text(
+                          wdgUploaded ? 'SENT' : 'WDG',
+                          style: TextStyle(
+                            color: wdgUploaded ? AppTheme.success : AppTheme.wdgwars,
                             fontSize: 9,
                             fontWeight: FontWeight.w700, letterSpacing: 0.5,
                           ),
@@ -3118,6 +3319,32 @@ class _CompletedSessionBarState extends ConsumerState<_CompletedSessionBar> {
       );
     }
   }
+
+  Future<void> _uploadToWdgwars(BuildContext context, WidgetRef wRef, String sid) async {
+    if (sid.isEmpty) return;
+    if (!await _confirmWdgwarsUpload(context)) return;
+    if (!context.mounted) return;
+    final wdg = wRef.read(wdgwarsProvider);
+    final result = await wdg.uploadSession(sid, wd);
+    if (!context.mounted) return;
+
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.wdgwars,
+          content: Text(result.summary,
+              style: const TextStyle(color: Color(0xFF0D1117))),
+        ),
+      );
+    } else if (wdg.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.error,
+          content: Text('Upload failed: ${wdg.error}'),
+        ),
+      );
+    }
+  }
 }
 
 class _SessionHistorySheet extends ConsumerStatefulWidget {
@@ -3245,6 +3472,7 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
                       ));
                     }
                     final wigle = ref.watch(wigleProvider);
+                    final wdg = ref.watch(wdgwarsProvider);
                     return ListView.builder(
                       controller: scrollController,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -3283,6 +3511,11 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
                               : null,
                           wigleUploaded: wigle.isUploaded(sid),
                           wigleUploading: wigle.isUploading(sid),
+                          onUploadWdgwars: wdg.isLoggedIn
+                              ? () => _uploadToWdgwars(context, ref, sid)
+                              : null,
+                          wdgwarsUploaded: wdg.isUploaded(sid),
+                          wdgwarsUploading: wdg.isUploading(sid),
                         );
                       },
                     );
@@ -3511,6 +3744,68 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
       );
     }
   }
+
+  Future<void> _uploadToWdgwars(BuildContext context, WidgetRef ref, String sid) async {
+    final wdg = ref.read(wdgwarsProvider);
+    final wd = ref.read(wardriveProvider);
+
+    if (wdg.isUploading(sid)) return;
+    if (!await _confirmWdgwarsUpload(context)) return;
+    if (!context.mounted) return;
+
+    final result = await wdg.uploadSession(sid, wd);
+    if (!context.mounted) return;
+
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.wdgwars,
+          content: Text(result.summary,
+              style: const TextStyle(color: Color(0xFF0D1117))),
+        ),
+      );
+    } else if (wdg.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.error,
+          content: Text('Upload failed: ${wdg.error}'),
+        ),
+      );
+    }
+  }
+}
+
+Future<bool> _confirmWdgwarsUpload(BuildContext context) async {
+  final t = AppTheme.of(context);
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: t.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Upload to WDGWars?',
+          style: TextStyle(color: t.textPrimary, fontWeight: FontWeight.w700)),
+      content: Text(
+        'This publishes this session — network MACs, SSIDs and GPS coordinates — '
+        'to the WDGWars map for your gang. Once uploaded it cannot be retracted.',
+        style: TextStyle(color: t.textDim, fontSize: 13),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text('CANCEL', style: TextStyle(color: t.textDim)),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppTheme.wdgwars,
+            foregroundColor: const Color(0xFF0D1117),
+          ),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('UPLOAD'),
+        ),
+      ],
+    ),
+  );
+  return ok ?? false;
 }
 
 Future<bool> _confirmWigleUpload(BuildContext context) async {
@@ -3558,6 +3853,9 @@ class _SessionRow extends ConsumerWidget {
     this.onUploadWigle,
     this.wigleUploaded = false,
     this.wigleUploading = false,
+    this.onUploadWdgwars,
+    this.wdgwarsUploaded = false,
+    this.wdgwarsUploading = false,
     this.flockCountFuture,
     this.detectorCountFuture,
     this.droneCountFuture,
@@ -3573,6 +3871,9 @@ class _SessionRow extends ConsumerWidget {
   final VoidCallback? onUploadWigle;
   final bool wigleUploaded;
   final bool wigleUploading;
+  final VoidCallback? onUploadWdgwars;
+  final bool wdgwarsUploaded;
+  final bool wdgwarsUploading;
   final Future<int>? flockCountFuture;
   final Future<int>? detectorCountFuture;
   final Future<int>? droneCountFuture;
@@ -3680,15 +3981,18 @@ class _SessionRow extends ConsumerWidget {
                 },
               ),
             );
-            final distText = SizedBox(
-              width: 48,
-              child: Text(
-                UnitFormatter.distance(session.distanceKm, units),
-                style: TextStyle(
-                  color: t.textDim, fontSize: 10,
-                  fontFamily: 'monospace',
+            final distText = Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: SizedBox(
+                width: 66,
+                child: Text(
+                  UnitFormatter.distance(session.distanceKm, units),
+                  style: TextStyle(
+                    color: t.textDim, fontSize: 10,
+                    fontFamily: 'monospace',
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
             );
             final flockStat = SizedBox(
@@ -3793,6 +4097,21 @@ class _SessionRow extends ConsumerWidget {
                     onTap: (wigleUploaded || wigleUploading) ? null : onUploadWigle,
                     isLoading: wigleUploading,
                   );
+            final wdgwarsBtn = onUploadWdgwars == null
+                ? null
+                : _SessionIconBtn(
+                    icon: wdgwarsUploading
+                        ? Icons.cloud_sync
+                        : (wdgwarsUploaded
+                            ? Icons.cloud_done
+                            : Icons.sports_esports),
+                    label: wdgwarsUploading
+                        ? 'SENDING'
+                        : (wdgwarsUploaded ? 'SENT' : 'WDG'),
+                    color: wdgwarsUploaded ? AppTheme.success : AppTheme.wdgwars,
+                    onTap: (wdgwarsUploaded || wdgwarsUploading) ? null : onUploadWdgwars,
+                    isLoading: wdgwarsUploading,
+                  );
             final delBtn = _SessionIconBtn(
               icon: Icons.delete_forever_outlined,
               label: 'DEL',
@@ -3806,8 +4125,26 @@ class _SessionRow extends ConsumerWidget {
                 wigleBtn,
                 const SizedBox(width: 4),
               ],
+              if (wdgwarsBtn != null) ...[
+                wdgwarsBtn,
+                const SizedBox(width: 4),
+              ],
               delBtn,
             ];
+            final buttons = <Widget>[
+              csvBtn,
+              if (wigleBtn != null) wigleBtn,
+              if (wdgwarsBtn != null) wdgwarsBtn,
+              delBtn,
+            ];
+            final actionBar = Row(
+              children: [
+                for (int i = 0; i < buttons.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 6),
+                  Expanded(child: buttons[i]),
+                ],
+              ],
+            );
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3834,11 +4171,8 @@ class _SessionRow extends ConsumerWidget {
                       const Spacer(),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: actionButtons,
-                  ),
+                  const SizedBox(height: 6),
+                  actionBar,
                 ] else
                   Row(
                     children: [

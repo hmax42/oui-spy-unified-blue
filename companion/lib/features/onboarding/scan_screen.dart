@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/ble/ble_permissions.dart';
+import 'package:oui_spy/core/ble/gatt_uuids.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 import 'package:uuid/uuid.dart';
@@ -106,7 +107,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
           final name = r.device.platformName.toUpperCase();
           final advName = r.advertisementData.advName.toUpperCase();
           if (name.contains('OUI') || name.contains('SPY') ||
-              advName.contains('OUI') || advName.contains('SPY')) {
+              advName.contains('OUI') || advName.contains('SPY') ||
+              r.advertisementData.serviceUuids.contains(GattUuids.service)) {
             _results[r.device.remoteId.toString()] = r;
           }
         }
@@ -337,7 +339,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                                           ? r.device.platformName
                                           : (r.advertisementData.advName.isNotEmpty
                                               ? r.advertisementData.advName
-                                              : '(unnamed)'),
+                                              : (r.advertisementData.serviceUuids.contains(GattUuids.service)
+                                                  ? 'OUI-SPY node'
+                                                  : '(unnamed)')),
                                         style: const TextStyle(color: AppTheme.accent, fontSize: 14, fontWeight: FontWeight.w600)),
                                     Text(
                                       isThisConnecting

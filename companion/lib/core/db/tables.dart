@@ -59,6 +59,7 @@ class Detections extends Table {
   // Flock extensions
   BoolColumn get isRaven => boolean().nullable()();
   TextColumn get ravenFirmware => text().nullable()();
+  IntColumn get flockSignals => integer().nullable()();
   // ODID extensions
   TextColumn get uavId => text().nullable()();
   TextColumn get operatorId => text().nullable()();

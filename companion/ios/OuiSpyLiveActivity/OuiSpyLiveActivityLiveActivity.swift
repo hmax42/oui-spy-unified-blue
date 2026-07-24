@@ -256,6 +256,9 @@ private struct LockScreenView: View {
                 Text(lockScreenSubtitle(state))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(.white.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .truncationMode(.tail)
             }
 
             Spacer()
@@ -280,6 +283,24 @@ private struct LockScreenView: View {
             Text(s.exploitStatus.uppercased())
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
                 .foregroundColor(engineColor(s.mode))
+        case .wardrive, .wardriveFlock:
+            VStack(alignment: .trailing, spacing: 3) {
+                HStack(spacing: 12) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "wifi").font(.system(size: 12))
+                        Text("\(s.wifiCount)")
+                            .font(.system(size: 19, weight: .bold, design: .monospaced))
+                    }
+                    .foregroundColor(engineColor(.wardrive))
+                    HStack(spacing: 3) {
+                        Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 12))
+                        Text("\(s.bleCount)")
+                            .font(.system(size: 19, weight: .bold, design: .monospaced))
+                    }
+                    .foregroundColor(engineColor(.flockBle))
+                }
+                lockScreenBadges(s)
+            }
         default:
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(s.uniqueCount)")
@@ -325,8 +346,9 @@ private struct LockScreenView: View {
             // Aggregate every active engine's count so the subtitle reflects
             // all running radios, not just the primary mode.
             var parts: [String] = []
-            let showsUnique = s.mode == .wardrive || s.mode == .wardriveFlock || s.uniqueCount > 0
-            if showsUnique { parts.append("\(s.uniqueCount) unique") }
+            if s.mode != .wardrive && s.mode != .wardriveFlock && s.uniqueCount > 0 {
+                parts.append("\(s.uniqueCount) unique")
+            }
             if s.flockCount > 0 { parts.append("\(s.flockCount) cameras") }
             if s.droneCount > 0 { parts.append("\(s.droneCount) drones") }
             if s.detectorHits > 0 { parts.append("\(s.detectorHits) hits") }
@@ -400,6 +422,8 @@ extension OuiSpyLiveActivityAttributes.ContentState {
         OuiSpyLiveActivityAttributes.ContentState(
             mode: .wardrive,
             uniqueCount: 1247,
+            wifiCount: 892,
+            bleCount: 355,
             flockCount: 3,
             droneCount: 1,
             detectorHits: 0,
