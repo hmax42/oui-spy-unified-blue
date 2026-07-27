@@ -49,6 +49,9 @@ Turn any of these on from the home screen:
 - **Record** — save raw wireless traffic to a `.pcap` file for Wireshark.
 - **Unitree robots** — detect (and connect to) Unitree robot dogs.
 
+> [!IMPORTANT]
+> The ALPR upstream OUI db (FlockYou) is used. This contains many false positives (Ubiquiti routers, Espressif, and other components found in consumer electronics). **Validate findings with your own eyes before submitting to sites like deflock.me** 
+
 ---
 
 ## Cover more area with extra boards
