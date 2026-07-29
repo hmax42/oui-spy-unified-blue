@@ -194,7 +194,7 @@ flutter build macos --release
 
 **Services:** [WiGLE](https://api.wigle.net) · [WDGWars](https://wdgwars.pl) · [CARTO](https://carto.com/basemaps/) / [OpenStreetMap](https://www.openstreetmap.org/) / [OpenTopoMap](https://opentopomap.org/) / [Stadia Maps](https://stadiamaps.com/) tiles · [Ringmast4r/OUI-Master-Database](https://github.com/Ringmast4r/OUI-Master-Database) vendor OUIs.
 
-**Standalone forks this unifies:** [Detector](https://github.com/colonelpanichacks/ouispy-detector) · [Foxhunter](https://github.com/colonelpanichacks/ouispy-foxhunter) · [Flock You](https://github.com/colonelpanichacks/flock-you) · [Sky-Spy](https://github.com/colonelpanichacks/Sky-Spy) · [Remote-ID-Spoofer](https://github.com/colonelpanichacks/Remote-ID-Spoofer) · [UniPwn](https://github.com/colonelpanichacks/Oui-Spy-UniPwn).
+**Standalone forks this unifies:** [Detector](https://github.com/colonelpanichacks/ouispy-detector) · [Foxhunter](https://github.com/colonelpanichacks/ouispy-foxhunter) · [Flock You](https://github.com/colonelpanichacks/flock-you) · [Sky-Spy](https://github.com/colonelpanichacks/Sky-Spy) · [UniPwn](https://github.com/colonelpanichacks/Oui-Spy-UniPwn).
 
 </details>
 
