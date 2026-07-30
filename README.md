@@ -8,13 +8,11 @@
 
 # OUI-APEX
 
-<img width="320" alt="OUI-SPY APEX" src="https://github.com/user-attachments/assets/5a201c27-558b-4409-9e49-82d6e0176a4c" />
+<!--- <img width="320" alt="OUI-SPY APEX" src="https://github.com/user-attachments/assets/5a201c27-558b-4409-9e49-82d6e0176a4c" /> --->
 
-**"Snoop unto them - as they snoop unto us"** 
+**"Snoop unto them - as they snoop unto us".** 
 
-Runs on a cheap ESP32 board — including the dual-band **ESP32-C5** that scans both **2.4 and 5 GHz** Wi-Fi. 
-
-> All controlled from a free app. No SD card, no laptop, no flash per-firmware. All data stored on device. **Full Wigle & WDGWARS support.**
+> All on one cheap board + Android/iOS. No SD card, no laptop, no flash per-firmware. All data stored on device. **Full Wigle & WDGwars support.**
 
 </div>
 
@@ -27,7 +25,7 @@ Runs on a cheap ESP32 board — including the dual-band **ESP32-C5** that scans 
 
 You need **one board** and the **app**.
 
-1. **Get a supported board** — any ESP32-S3 works (full list below).
+1. **Get a supported board** — most any ESP32-S3 works (full list below). Xiao C5 for 5G.  
 2. **Flash it** — open the [web flasher](https://lukeswitz.github.io/oui-spy-unified-blue/) in Chrome or Edge, plug the board in over USB-C, leave the target on **NODE**, and click **Connect & Flash**. You do this once — after that the app updates the board itself.
 3. **Install the app** — [Android](https://github.com/lukeswitz/oui-spy-unified-blue/releases/latest) · [iPhone / Mac (TestFlight)](https://testflight.apple.com/join/5RCKgnJ2) · [Mac download](https://github.com/lukeswitz/oui-spy-unified-blue/releases/latest).
 4. **Connect** — open the app, tap **CONNECT**, and pick your board. That's it.
@@ -50,6 +48,9 @@ Turn any of these on from the home screen:
 - **Wardrive** — map every Wi-Fi and Bluetooth device around you, with GPS, WiGLE-style.
 - **Record** — save raw wireless traffic to a `.pcap` file for Wireshark.
 - **Unitree robots** — detect (and connect to) Unitree robot dogs.
+
+> [!IMPORTANT]
+> The ALPR upstream OUI db (FlockYou) is used. This contains many false positives (Ubiquiti routers, Espressif, and other components found in consumer electronics). **Validate findings with your own eyes before submitting to sites like deflock.me** 
 
 ---
 
@@ -193,7 +194,7 @@ flutter build macos --release
 
 **Services:** [WiGLE](https://api.wigle.net) · [WDGWars](https://wdgwars.pl) · [CARTO](https://carto.com/basemaps/) / [OpenStreetMap](https://www.openstreetmap.org/) / [OpenTopoMap](https://opentopomap.org/) / [Stadia Maps](https://stadiamaps.com/) tiles · [Ringmast4r/OUI-Master-Database](https://github.com/Ringmast4r/OUI-Master-Database) vendor OUIs.
 
-**Standalone forks this unifies:** [Detector](https://github.com/colonelpanichacks/ouispy-detector) · [Foxhunter](https://github.com/colonelpanichacks/ouispy-foxhunter) · [Flock You](https://github.com/colonelpanichacks/flock-you) · [Sky-Spy](https://github.com/colonelpanichacks/Sky-Spy) · [Remote-ID-Spoofer](https://github.com/colonelpanichacks/Remote-ID-Spoofer) · [UniPwn](https://github.com/colonelpanichacks/Oui-Spy-UniPwn).
+**Standalone forks this unifies:** [Detector](https://github.com/colonelpanichacks/ouispy-detector) · [Foxhunter](https://github.com/colonelpanichacks/ouispy-foxhunter) · [Flock You](https://github.com/colonelpanichacks/flock-you) · [Sky-Spy](https://github.com/colonelpanichacks/Sky-Spy) · [UniPwn](https://github.com/colonelpanichacks/Oui-Spy-UniPwn).
 
 </details>
 
