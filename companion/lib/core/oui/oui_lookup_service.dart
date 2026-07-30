@@ -58,12 +58,13 @@ class OuiLookupService extends ChangeNotifier {
     // @NitekryDPaul April 2026 additions
     'B41E52': 'Flock Safety',
     '14B5CD': 'Flock Safety (Falcon)',
-    '942A6F': 'Flock Safety (Falcon)',
-    'F4E2C6': 'Flock Safety (Falcon)',
     'D411D6': 'Flock Safety (Falcon)',
     'E00AF6': 'Flock Safety (Falcon)',
     // DeFlockJoplin — wildcard-probe field research
     '826BF2': 'Flock Safety (Falcon)',
+    // Flock Safety BLE — @NitekryDPaul Jul 2026 LE CSV
+    '00408C': 'Flock Safety',
+    'ACCC8E': 'Flock Safety',
     // Flock Safety — Raven gunshot detector (Espressif)
     'EC6260': 'Flock Safety (Raven)',
   };
@@ -86,6 +87,9 @@ class OuiLookupService extends ChangeNotifier {
     final prefix = _prefixOf(mac);
     return prefix != null && lawEnforcementOuis.containsKey(prefix);
   }
+
+  static bool isFoxhuntBlocked(String mac, [String? method]) =>
+      isLawEnforcement(mac) || method == 'axon';
 
   bool get isLoaded => _loaded;
   int get entryCount => _db.length;

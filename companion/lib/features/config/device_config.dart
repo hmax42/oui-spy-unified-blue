@@ -4446,19 +4446,20 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                     )),
                   ),
                 ),
-                Expanded(
-                  child: TextButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _startFoxhunt(det);
-                    },
-                    icon: const Icon(Icons.gps_fixed, size: 14,
-                        color: AppTheme.foxhunter),
-                    label: const Text('Foxhunt', style: TextStyle(
-                      color: AppTheme.foxhunter, fontSize: 11,
-                    )),
+                if (!OuiLookupService.isFoxhuntBlocked(mac, method))
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _startFoxhunt(det);
+                      },
+                      icon: const Icon(Icons.gps_fixed, size: 14,
+                          color: AppTheme.foxhunter),
+                      label: const Text('Foxhunt', style: TextStyle(
+                        color: AppTheme.foxhunter, fontSize: 11,
+                      )),
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -4512,6 +4513,18 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
   void _startFoxhunt(Map<String, dynamic> det) {
     final mac = det['macAddress'] as String;
     final channel = det['channel'] as int? ?? 0;
+
+    if (OuiLookupService.isFoxhuntBlocked(mac, det['detectionMethod'] as String?)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppTheme.warning,
+            content: Text('Foxhunt blocked — law enforcement device'),
+          ),
+        );
+      }
+      return;
+    }
 
     ref.read(appStateProvider).setFoxhunterTarget(
       mac,
@@ -4924,6 +4937,7 @@ class _DetectionRow extends ConsumerWidget {
     final rssi = data['rssi'] as int;
     final channel = data['channel'] as int? ?? 0;
     final method = data['detectionMethod'] as String? ?? '';
+    final foxhuntBlocked = OuiLookupService.isFoxhuntBlocked(mac, method);
     final ts = DateTime.fromMillisecondsSinceEpoch(data['appTimestamp'] as int);
     final timeStr = AppTime.dateTimeShort(ts);
     final hasGps = data['latitude'] != null && data['longitude'] != null;
@@ -5146,35 +5160,36 @@ class _DetectionRow extends ConsumerWidget {
                     ),
                   ),
                 ),
-                Container(width: 0.5, height: 20, color: t.border),
-                // Foxhunt button
-                Expanded(
-                  child: GestureDetector(
-                    onTap: connected ? onFoxhunt : null,
-                    behavior: HitTestBehavior.opaque,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.gps_fixed, size: 16,
-                            color: connected
-                                ? AppTheme.foxhunter
-                                : t.textDim.withValues(alpha: 0.3)),
-                          const SizedBox(width: 6),
-                          Text('FOXHUNT', style: TextStyle(
-                            color: connected
-                                ? AppTheme.foxhunter
-                                : t.textDim.withValues(alpha: 0.3),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
-                          )),
-                        ],
+                if (!foxhuntBlocked) ...[
+                  Container(width: 0.5, height: 20, color: t.border),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: connected ? onFoxhunt : null,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.gps_fixed, size: 16,
+                              color: connected
+                                  ? AppTheme.foxhunter
+                                  : t.textDim.withValues(alpha: 0.3)),
+                            const SizedBox(width: 6),
+                            Text('FOXHUNT', style: TextStyle(
+                              color: connected
+                                  ? AppTheme.foxhunter
+                                  : t.textDim.withValues(alpha: 0.3),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1,
+                            )),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

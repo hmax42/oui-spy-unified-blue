@@ -48,7 +48,7 @@ class WardriveScreen extends ConsumerStatefulWidget {
 class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBindingObserver {
   final _mapController = MapController();
   bool _followMode = true;
-  String? _fittedSessionId;
+  int _lastSessionLoadEpoch = 0;
   bool _initialFitDone = false;
   bool _idleCenteredDone = false;
   bool _feedCollapsed = false;
@@ -66,6 +66,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   String _cachedLayersKey = '';
   List<Geofence> _exclusionZones = [];
   bool _priming = false;
+  bool _reconnectPromptOpen = false;
 
   @override
   void initState() {
@@ -309,6 +310,41 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     );
   }
 
+  Future<void> _showReconnectPrompt(WardriveController wd) async {
+    final t = AppTheme.of(context);
+    final cont = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: t.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Connection Restored',
+          style: TextStyle(color: t.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+        content: Text(
+          'The node reconnected during a wardrive. Continue the session?',
+          style: TextStyle(color: t.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('STOP & SAVE', style: TextStyle(color: t.textDim)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('CONTINUE', style: TextStyle(color: AppTheme.accent)),
+          ),
+        ],
+      ),
+    );
+    _reconnectPromptOpen = false;
+    if (!mounted) return;
+    if (cont == true) {
+      await wd.continueAfterReconnect();
+    } else {
+      await wd.stopAfterReconnect();
+    }
+  }
+
   void _onMapReady() {
     if (_initialFitDone) return;
     final wd = ref.read(wardriveProvider);
@@ -547,6 +583,16 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     final mapStyle = ref.watch(mapStyleProvider);
     final wt = ref.watch(wardriveThemeDataProvider);
     final wd = ref.watch(wardriveProvider);
+    if (wd.pendingReconnectPrompt && !_reconnectPromptOpen) {
+      _reconnectPromptOpen = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && wd.pendingReconnectPrompt) {
+          _showReconnectPrompt(wd);
+        } else {
+          _reconnectPromptOpen = false;
+        }
+      });
+    }
     final appEngines = ref.watch(appStateProvider);
     final gpsPos = ref.watch(gpsProvider).lastPosition;
     final selfPos = wd.currentPosition ?? gpsPos;
@@ -558,16 +604,17 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
 
     // Fit to session bounds when a saved session is loaded
     final loadedId = wd.loadedSessionId;
-    if (loadedId != null && loadedId != _fittedSessionId && wd.hasSessionData) {
-      _fittedSessionId = loadedId;
+    if (loadedId != null &&
+        wd.sessionLoadEpoch != _lastSessionLoadEpoch &&
+        wd.hasSessionData) {
+      _lastSessionLoadEpoch = wd.sessionLoadEpoch;
+      _focusedDetection = null;
       _followMode = false;
       _initialFitDone = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _fitToSessionBounds(wd);
       });
-    } else if (loadedId == null) {
-      _fittedSessionId = null;
     }
 
     if (!wd.isActive &&

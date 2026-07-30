@@ -206,13 +206,24 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
             std::string gm = dev->getManufacturerData();
             if (gm.size() >= 2) {
                 uint16_t cid = (uint16_t)((uint8_t)gm[0] | ((uint8_t)gm[1] << 8));
-                metaMfg = (cid == 0x01AB || cid == 0x058E || cid == 0x0D53);
+                metaMfg = (cid == 0x0D53);
             }
         }
-        bool metaSvc = dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFD5F)) ||
-                       dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFEB7)) ||
-                       dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFEB8));
-        if ((metaMfg || metaSvc) && !sigDedup.check(mac)) {
+        bool metaSvc = dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFD5F));
+        bool metaName = false;
+        if (dev->haveName()) {
+            std::string nm = dev->getName();
+            metaName = nm.find("Ray-Ban") != std::string::npos ||
+                       nm.find("Wayfarer") != std::string::npos ||
+                       nm.find("Oakley Meta") != std::string::npos;
+        }
+        static const uint8_t META_OUIS[][3] = {
+            {0x98, 0x59, 0x49}, {0x80, 0xAA, 0x1C}, {0x38, 0x47, 0x12}};
+        bool metaMac = false;
+        for (const auto& oui : META_OUIS) {
+            if (memcmp(mac, oui, 3) == 0) { metaMac = true; break; }
+        }
+        if ((metaMfg || metaSvc || metaName || metaMac) && !sigDedup.check(mac)) {
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
             memcpy(evt.mac, mac, 6);

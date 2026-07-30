@@ -19,6 +19,7 @@ import 'package:oui_spy/core/gps/gps_types.dart';
 import 'package:oui_spy/core/geofence/geofence_filter.dart';
 import 'package:oui_spy/core/ignore_list_state.dart';
 import 'package:oui_spy/core/models/detection.dart';
+import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/core/models/session.dart';
@@ -139,8 +140,20 @@ class WardriveController extends ChangeNotifier {
       if (connState == NodeConnectionState.ready) {
         SharedPreferences.getInstance().then(
             (p) => offlineGpsTag = p.getBool('offlineGpsTagEnabled') ?? false);
+        if (state == WardriveState.running &&
+            _droppedWhileRunning &&
+            !_ble.offlineScanEnabled) {
+          _droppedWhileRunning = false;
+          pendingReconnectPrompt = true;
+          notifyListeners();
+          return;
+        }
+        _droppedWhileRunning = false;
         _adoptFirmwareState();
         _pushWifiBand();
+      } else if (connState == NodeConnectionState.disconnected ||
+          connState == NodeConnectionState.reconnecting) {
+        if (state == WardriveState.running) _droppedWhileRunning = true;
       }
     });
     _importedDetSub = _ble.importedDetections.listen(_onImportedDetection);
@@ -243,6 +256,8 @@ class WardriveController extends ChangeNotifier {
   // until the running header (or idle controls) is real. 'starting' | 'stopping'.
   String? radioTransition;
   bool _userStopped = false;
+  bool _droppedWhileRunning = false;
+  bool pendingReconnectPrompt = false;
   final Set<WardriveTarget> selectedTargets = {};
   static const List<WardriveTarget> selectableTargets = [
     WardriveTarget.flock,
@@ -387,6 +402,8 @@ class WardriveController extends ChangeNotifier {
 
   /// Detection the map should isolate when it consumes [pendingZoomTarget].
   Detection? pendingZoomDetection;
+
+  int sessionLoadEpoch = 0;
 
   /// Request the wardrive map to zoom to a specific location.
   void requestZoom(double lat, double lon, {Detection? detection}) {
@@ -733,6 +750,8 @@ class WardriveController extends ChangeNotifier {
     radioTransition = 'stopping';
     state = WardriveState.idle;
     _userStopped = true;
+    _droppedWhileRunning = false;
+    pendingReconnectPrompt = false;
     _ble.wardriveSessionActive = false;
     notifyListeners();
 
@@ -743,26 +762,10 @@ class WardriveController extends ChangeNotifier {
     _gpsSub = null;
     _statsTimer = null;
 
-    const wardriveEngines = [
-      Engine.wardrive,
-      Engine.flockWifi,
-      Engine.flockBle,
-      Engine.skySpy,
-      Engine.detector,
-      Engine.pcap,
-    ];
     try {
-      if (_ble.board.toLowerCase().contains('c5')) {
-        await _ble.disableAllEngines();
-      } else {
-        for (final engine in wardriveEngines) {
-          try {
-            await _ble.disableEngine(engine);
-          } catch (e) {
-            DebugLog.log('WARDRIVE: disable $engine error: $e');
-          }
-        }
-      }
+      await _teardownEngines().timeout(const Duration(seconds: 4));
+    } catch (e) {
+      DebugLog.log('WARDRIVE: engine teardown incomplete (link down?): $e');
     } finally {
       WakelockPlus.disable();
       _liveActivity.end();
@@ -771,37 +774,62 @@ class WardriveController extends ChangeNotifier {
     radioTransition = null;
     notifyListeners();
 
-    if (sessionId.isNotEmpty && startTime != null) {
+    await _finalizeSession();
+  }
+
+  Future<void> _teardownEngines() async {
+    const wardriveEngines = [
+      Engine.wardrive,
+      Engine.flockWifi,
+      Engine.flockBle,
+      Engine.skySpy,
+      Engine.detector,
+      Engine.pcap,
+    ];
+    if (_ble.board.toLowerCase().contains('c5')) {
+      await _ble.disableAllEngines();
+    } else {
+      for (final engine in wardriveEngines) {
+        try {
+          await _ble.disableEngine(engine);
+        } catch (e) {
+          DebugLog.log('WARDRIVE: disable $engine error: $e');
+        }
+      }
+    }
+  }
+
+  Future<void> _finalizeSession() async {
+    final sid = sessionId;
+    if (sid.isNotEmpty && startTime != null) {
       try {
         await _db.updateSession(SessionsCompanion(
-          id: drift.Value(sessionId),
+          id: drift.Value(sid),
           endedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
           detectionCount: drift.Value(detections.length),
           uniqueMacCount: drift.Value(uniqueMacs.length),
           distanceKm: drift.Value(distanceKm),
         ));
       } catch (e) {
-        DebugLog.log('WARDRIVE: updateSession finalize failed for $sessionId: $e');
+        DebugLog.log('WARDRIVE: updateSession finalize failed for $sid: $e');
       }
 
-      await _saveCsv(sessionId, detections);
+      await _saveCsv(sid, detections);
 
-      DebugLog.log('WARDRIVE: saved $sessionId (${detections.length} det, ${uniqueMacs.length} unique, ${_flockMacs.length} flock)');
+      DebugLog.log('WARDRIVE: saved $sid (${detections.length} det, ${uniqueMacs.length} unique, ${_flockMacs.length} flock)');
 
       final wl = _watchlistGetter?.call() ?? const <WatchlistEntry>[];
-      _rescanSessionId = sessionId;
+      _rescanSessionId = sid;
       _rescanCur = 0;
       _rescanTotal = detections.length;
       _rescanNewDetector = 0;
       _rescanNewFlock = 0;
       notifyListeners();
-      // Rescan the saved session against the watchlist in the background so it
-      // never blocks the stop / freezes the UI (grows with session length).
       unawaited(() async {
         try {
           final res = await WigleCsvRescan.rescanSession(
             _db,
-            sessionId,
+            sid,
             watchlist: wl,
             onProgress: (cur, total, newDet, newFlock) {
               _rescanCur = cur;
@@ -812,7 +840,7 @@ class WardriveController extends ChangeNotifier {
             },
           );
           DebugLog.log(
-              'WARDRIVE: rescan $sessionId scanned=${res.rowsScanned} updated=${res.rowsUpdated} det=${res.newDetectorMacs} flock=${res.newFlockMacs}');
+              'WARDRIVE: rescan $sid scanned=${res.rowsScanned} updated=${res.rowsUpdated} det=${res.newDetectorMacs} flock=${res.newFlockMacs}');
         } catch (e) {
           DebugLog.log('WARDRIVE: rescan failed $e');
         }
@@ -821,8 +849,40 @@ class WardriveController extends ChangeNotifier {
       }());
     }
 
-    _lastCompletedSessionId = sessionId;
+    if (sid.isNotEmpty) _lastCompletedSessionId = sid;
     notifyListeners();
+  }
+
+  Future<void> finalizeForShutdown() async {
+    if (!isActive) return;
+    final sid = sessionId;
+    if (sid.isEmpty || startTime == null) return;
+    _ble.wardriveSessionActive = false;
+    try {
+      await _db.updateSession(SessionsCompanion(
+        id: drift.Value(sid),
+        endedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
+        detectionCount: drift.Value(detections.length),
+        uniqueMacCount: drift.Value(uniqueMacs.length),
+        distanceKm: drift.Value(distanceKm),
+      ));
+      DebugLog.log('WARDRIVE: finalized on shutdown $sid (${detections.length} det)');
+    } catch (e) {
+      DebugLog.log('WARDRIVE: shutdown finalize failed for $sid: $e');
+    }
+  }
+
+  Future<void> continueAfterReconnect() async {
+    pendingReconnectPrompt = false;
+    _droppedWhileRunning = false;
+    notifyListeners();
+    await _adoptFirmwareState();
+    _pushWifiBand();
+  }
+
+  Future<void> stopAfterReconnect() async {
+    pendingReconnectPrompt = false;
+    await stopSession();
   }
 
   /// Session ID of the most recently completed or loaded session.
@@ -977,6 +1037,7 @@ class WardriveController extends ChangeNotifier {
 
     sessionId = sid;
     _lastCompletedSessionId = sid;
+    sessionLoadEpoch++;
     notifyListeners();
     DebugLog.log('WARDRIVE: loaded session $sid (${detections.length} det, ${routePoints.length} pts)');
   }
@@ -1089,6 +1150,7 @@ class WardriveController extends ChangeNotifier {
   }
 
   void setFoxhuntTarget(String mac, {int channel = 0}) {
+    if (OuiLookupService.isLawEnforcement(mac)) return;
     _ble.enableEngine(Engine.foxhunter);
     _ble.setFoxhunterTarget(mac, channel: channel);
     foxhuntTarget = mac;

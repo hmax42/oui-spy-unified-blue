@@ -17,6 +17,7 @@ import 'package:oui_spy/features/pcap/pcap_screen.dart';
 import 'package:oui_spy/features/pcap/pcap_library_screen.dart';
 import 'package:oui_spy/features/wardrive/wardrive_screen.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
+import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/core/notifications/live_activity_service.dart';
 import 'package:oui_spy/core/notifications/notification_service.dart';
 import 'package:oui_spy/core/app_time.dart';
@@ -119,6 +120,7 @@ class _OuiSpyAppState extends ConsumerState<OuiSpyApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) {
+      ref.read(wardriveProvider).finalizeForShutdown();
       ref.read(bleManagerProvider).disconnectQuiet();
       ref.read(liveActivityServiceProvider).endAll();
       ref.read(notificationServiceProvider).cancelAll();
