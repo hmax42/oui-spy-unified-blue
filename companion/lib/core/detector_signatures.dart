@@ -32,7 +32,7 @@ const List<DetectorSignature> detectorSignatures = [
   DetectorSignature(sigPwnagotchi, 'Pwnagotchi', 'Pwnagotchi', Icons.smart_toy,
       'Pwnagotchi handshake-harvester beacons'),
   DetectorSignature(sigGlasses, 'Meta glasses', 'Meta glasses', Icons.visibility,
-      'Meta Ray-Ban / smart glasses (BLE, visible at power-on/pairing)'),
+      'Ray-Ban / Oakley Meta smart glasses — Luxottica CID 0x0D53, service 0xFD5F, name or frame OUI (excludes Quest/Portal)'),
   DetectorSignature(sigAxon, 'Axon (Law Enforcement)', 'Axon', Icons.local_police,
       'Axon Enterprise hardware — Taser, body cameras, Signal (BLE + promiscuous WiFi OUI 00:25:DF)'),
 ];

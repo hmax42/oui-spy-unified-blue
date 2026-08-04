@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/device_config.dart';
+import 'package:oui_spy/features/config/widgets/config_nav.dart'
+    show kConfigSectionSheetRoute;
 import 'package:oui_spy/features/engines/detector_screen.dart';
 import 'package:oui_spy/features/engines/foxhunter_screen.dart';
 import 'package:oui_spy/features/engines/skyspy_screen.dart';
@@ -14,6 +17,7 @@ import 'package:oui_spy/features/pcap/pcap_screen.dart';
 import 'package:oui_spy/features/pcap/pcap_library_screen.dart';
 import 'package:oui_spy/features/wardrive/wardrive_screen.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
+import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/core/notifications/live_activity_service.dart';
 import 'package:oui_spy/core/notifications/notification_service.dart';
 import 'package:oui_spy/core/app_time.dart';
@@ -104,6 +108,7 @@ class _OuiSpyAppState extends ConsumerState<OuiSpyApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ref.read(configMenuWantedProvider.notifier).state = false;
   }
 
   @override
@@ -115,6 +120,7 @@ class _OuiSpyAppState extends ConsumerState<OuiSpyApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) {
+      ref.read(wardriveProvider).finalizeForShutdown();
       ref.read(bleManagerProvider).disconnectQuiet();
       ref.read(liveActivityServiceProvider).endAll();
       ref.read(notificationServiceProvider).cancelAll();
@@ -218,16 +224,39 @@ class _GlobalPcapBannerOverlay extends ConsumerWidget {
   }
 }
 
-class AppShell extends StatefulWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.child});
   final Widget child;
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> {
   static const _routes = ['/home', '/feed', '/wardrive', '/config'];
+  static const _configIndex = 3;
+
+  /// The section sheet lives on the shell navigator, which sits below this
+  /// widget's context — reach it by key, not by Navigator.of(context).
+  bool get _sectionSheetOpen {
+    final nav = _shellNavigatorKey.currentState;
+    if (nav == null) return false;
+    var open = false;
+    nav.popUntil((r) {
+      if (r.settings.name == kConfigSectionSheetRoute) open = true;
+      return true;
+    });
+    return open;
+  }
+
+  void _onNavTap(int i) {
+    if (i == _configIndex) {
+      ref.read(configMenuWantedProvider.notifier).state = !_sectionSheetOpen;
+    }
+    if (_routes[i] != GoRouterState.of(context).uri.path) {
+      context.go(_routes[i]);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -237,7 +266,7 @@ class _AppShellState extends State<AppShell> {
       body: widget.child,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: index < 0 ? 0 : index,
-        onTap: (i) => context.go(_routes[i]),
+        onTap: _onNavTap,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),

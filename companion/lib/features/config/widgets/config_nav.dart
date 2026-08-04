@@ -61,10 +61,38 @@ class ConfigBottomBar extends StatelessWidget {
   }
 }
 
+const kConfigSectionSheetRoute = 'config-section-sheet';
+
+/// Asked of the navigator, never cached — a torn-down route can't strand a flag.
+bool configSectionSheetOpen(BuildContext context) {
+  var open = false;
+  Navigator.of(context).popUntil((r) {
+    if (r.settings.name == kConfigSectionSheetRoute) open = true;
+    return true;
+  });
+  return open;
+}
+
+Future<void> toggleConfigSectionSheet(
+    BuildContext context, TabController controller) async {
+  if (configSectionSheetOpen(context)) {
+    await Navigator.of(context).maybePop();
+    return;
+  }
+  await showConfigSectionSheet(context, controller);
+}
+
 Future<void> showConfigSectionSheet(
+    BuildContext context, TabController controller) {
+  if (configSectionSheetOpen(context)) return Future<void>.value();
+  return _showSectionSheet(context, controller);
+}
+
+Future<void> _showSectionSheet(
     BuildContext context, TabController controller) {
   return showCommandSheet<void>(
     context: context,
+    routeSettings: const RouteSettings(name: kConfigSectionSheetRoute),
     builder: (ctx) => CommandSheet(
       title: 'SECTION',
       child: LayoutBuilder(

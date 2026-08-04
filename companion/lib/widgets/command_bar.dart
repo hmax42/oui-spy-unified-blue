@@ -470,10 +470,12 @@ class CommandSheet extends StatelessWidget {
 Future<T?> showCommandSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
+  RouteSettings? routeSettings,
 }) {
   final t = AppTheme.of(context);
   return showModalBottomSheet<T>(
     context: context,
+    routeSettings: routeSettings,
     backgroundColor: t.surface,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(

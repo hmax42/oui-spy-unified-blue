@@ -17,6 +17,7 @@ import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/ble/gatt_uuids.dart';
 import 'package:oui_spy/core/db/app_database.dart' hide Detection;
+import 'package:oui_spy/core/db/detection_mapper.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/ota/ota_service.dart';
 import 'package:oui_spy/core/oui/oui_lookup_service.dart';
@@ -24,6 +25,7 @@ import 'package:oui_spy/core/ignore_list_state.dart';
 import 'package:oui_spy/core/watchlist_state.dart';
 import 'package:oui_spy/core/export/wigle_csv_import.dart';
 import 'package:oui_spy/features/config/widgets/config_widgets.dart';
+import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/widgets/config_nav.dart';
 import 'package:oui_spy/features/config/ota_progress_stepper.dart';
 import 'package:oui_spy/features/notifications/notification_settings_screen.dart';
@@ -48,6 +50,7 @@ class DeviceConfigScreen extends ConsumerStatefulWidget {
 
 class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     with SingleTickerProviderStateMixin {
+  static const _keyLastTab = 'config_last_tab';
   late TabController _tabController;
 
   bool _flockExtendedOui = false;
@@ -73,9 +76,18 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: kConfigSections.length, vsync: this);
-    _offlineGpsTag =
-        ref.read(sharedPreferencesProvider).getBool('offlineGpsTagEnabled') ?? false;
+    final prefs = ref.read(sharedPreferencesProvider);
+    _tabController = TabController(
+      length: kConfigSections.length,
+      vsync: this,
+      initialIndex: (prefs.getInt(_keyLastTab) ?? 0)
+          .clamp(0, kConfigSections.length - 1),
+    );
+    _tabController.addListener(_persistTab);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ref.read(configMenuWantedProvider)) _syncSectionSheet(true);
+    });
+    _offlineGpsTag = prefs.getBool('offlineGpsTagEnabled') ?? false;
     _readDeviceConfig();
     final ble = ref.read(bleManagerProvider);
     _connStateSub = ble.connectionState.listen((s) {
@@ -86,9 +98,30 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     });
   }
 
+  void _persistTab() {
+    if (_tabController.indexIsChanging) return;
+    ref.read(sharedPreferencesProvider).setInt(_keyLastTab, _tabController.index);
+  }
+
+  Future<void> _syncSectionSheet(bool wanted) async {
+    if (!mounted) return;
+    if (!wanted) {
+      if (configSectionSheetOpen(context)) await Navigator.of(context).maybePop();
+      return;
+    }
+    await showConfigSectionSheet(context, _tabController);
+    if (!mounted) return;
+    if (ref.read(configMenuWantedProvider)) {
+      ref.read(configMenuWantedProvider.notifier).state = false;
+    }
+  }
+
   @override
   void dispose() {
+    // Leaving with the sheet up must not re-open it on the next visit.
+    ref.read(configMenuWantedProvider.notifier).state = false;
     _connStateSub?.cancel();
+    _tabController.removeListener(_persistTab);
     _tabController.dispose();
     _ssidController.dispose();
     _passController.dispose();
@@ -178,6 +211,9 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
+    ref.listen<bool>(configMenuWantedProvider, (_, wanted) {
+      _syncSectionSheet(wanted);
+    });
     return Scaffold(
       backgroundColor: t.background,
       body: GestureDetector(
@@ -4410,19 +4446,20 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                     )),
                   ),
                 ),
-                Expanded(
-                  child: TextButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _startFoxhunt(det);
-                    },
-                    icon: const Icon(Icons.gps_fixed, size: 14,
-                        color: AppTheme.foxhunter),
-                    label: const Text('Foxhunt', style: TextStyle(
-                      color: AppTheme.foxhunter, fontSize: 11,
-                    )),
+                if (!OuiLookupService.isFoxhuntBlocked(mac, method))
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _startFoxhunt(det);
+                      },
+                      icon: const Icon(Icons.gps_fixed, size: 14,
+                          color: AppTheme.foxhunter),
+                      label: const Text('Foxhunt', style: TextStyle(
+                        color: AppTheme.foxhunter, fontSize: 11,
+                      )),
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -4467,7 +4504,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
 
     wd.loadSession(sid).then((_) {
       if (lat != null && lon != null) {
-        wd.requestZoom(lat, lon);
+        wd.requestZoom(lat, lon, detection: detectionFromDbRow(det));
       }
       if (context.mounted) context.go('/wardrive');
     });
@@ -4476,6 +4513,18 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
   void _startFoxhunt(Map<String, dynamic> det) {
     final mac = det['macAddress'] as String;
     final channel = det['channel'] as int? ?? 0;
+
+    if (OuiLookupService.isFoxhuntBlocked(mac, det['detectionMethod'] as String?)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppTheme.warning,
+            content: Text('Foxhunt blocked — law enforcement device'),
+          ),
+        );
+      }
+      return;
+    }
 
     ref.read(appStateProvider).setFoxhunterTarget(
       mac,
@@ -4888,6 +4937,7 @@ class _DetectionRow extends ConsumerWidget {
     final rssi = data['rssi'] as int;
     final channel = data['channel'] as int? ?? 0;
     final method = data['detectionMethod'] as String? ?? '';
+    final foxhuntBlocked = OuiLookupService.isFoxhuntBlocked(mac, method);
     final ts = DateTime.fromMillisecondsSinceEpoch(data['appTimestamp'] as int);
     final timeStr = AppTime.dateTimeShort(ts);
     final hasGps = data['latitude'] != null && data['longitude'] != null;
@@ -5110,35 +5160,36 @@ class _DetectionRow extends ConsumerWidget {
                     ),
                   ),
                 ),
-                Container(width: 0.5, height: 20, color: t.border),
-                // Foxhunt button
-                Expanded(
-                  child: GestureDetector(
-                    onTap: connected ? onFoxhunt : null,
-                    behavior: HitTestBehavior.opaque,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.gps_fixed, size: 16,
-                            color: connected
-                                ? AppTheme.foxhunter
-                                : t.textDim.withValues(alpha: 0.3)),
-                          const SizedBox(width: 6),
-                          Text('FOXHUNT', style: TextStyle(
-                            color: connected
-                                ? AppTheme.foxhunter
-                                : t.textDim.withValues(alpha: 0.3),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
-                          )),
-                        ],
+                if (!foxhuntBlocked) ...[
+                  Container(width: 0.5, height: 20, color: t.border),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: connected ? onFoxhunt : null,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.gps_fixed, size: 16,
+                              color: connected
+                                  ? AppTheme.foxhunter
+                                  : t.textDim.withValues(alpha: 0.3)),
+                            const SizedBox(width: 6),
+                            Text('FOXHUNT', style: TextStyle(
+                              color: connected
+                                  ? AppTheme.foxhunter
+                                  : t.textDim.withValues(alpha: 0.3),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1,
+                            )),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

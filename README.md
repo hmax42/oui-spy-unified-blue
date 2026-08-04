@@ -8,13 +8,11 @@
 
 # OUI-APEX
 
-<img width="320" alt="OUI-SPY APEX" src="https://github.com/user-attachments/assets/5a201c27-558b-4409-9e49-82d6e0176a4c" />
+<!--- <img width="320" alt="OUI-SPY APEX" src="https://github.com/user-attachments/assets/5a201c27-558b-4409-9e49-82d6e0176a4c" /> --->
 
-**"Snoop unto them - as they snoop unto us"** 
+**"Snoop unto them - as they snoop unto us".** 
 
-Runs on a cheap ESP32 board — including the dual-band **ESP32-C5** that scans both **2.4 and 5 GHz** Wi-Fi. 
-
-> All controlled from a free app. No SD card, no laptop, no flash per-firmware. All data stored on device. **Full Wigle & WDGWARS support.**
+> All on one cheap board + Android/iOS. No SD card, no laptop, no flash per-firmware. All data stored on device. **Full Wigle & WDGwars support.**
 
 </div>
 
@@ -27,7 +25,7 @@ Runs on a cheap ESP32 board — including the dual-band **ESP32-C5** that scans 
 
 You need **one board** and the **app**.
 
-1. **Get a supported board** — any ESP32-S3 works (full list below).
+1. **Get a supported board** — most any ESP32-S3 works (full list below). Xiao C5 for 5G.  
 2. **Flash it** — open the [web flasher](https://lukeswitz.github.io/oui-spy-unified-blue/) in Chrome or Edge, plug the board in over USB-C, leave the target on **NODE**, and click **Connect & Flash**. You do this once — after that the app updates the board itself.
 3. **Install the app** — [Android](https://github.com/lukeswitz/oui-spy-unified-blue/releases/latest) · [iPhone / Mac (TestFlight)](https://testflight.apple.com/join/5RCKgnJ2) · [Mac download](https://github.com/lukeswitz/oui-spy-unified-blue/releases/latest).
 4. **Connect** — open the app, tap **CONNECT**, and pick your board. That's it.
@@ -50,6 +48,9 @@ Turn any of these on from the home screen:
 - **Wardrive** — map every Wi-Fi and Bluetooth device around you, with GPS, WiGLE-style.
 - **Record** — save raw wireless traffic to a `.pcap` file for Wireshark.
 - **Unitree robots** — detect (and connect to) Unitree robot dogs.
+
+> [!IMPORTANT]
+> The ALPR upstream OUI db (FlockYou) is used. This contains many false positives (Ubiquiti routers, Espressif, and other components found in consumer electronics). **Validate findings with your own eyes before submitting to sites like deflock.me** 
 
 ---
 
@@ -125,10 +126,10 @@ One Flutter app for iOS, macOS, and Android.
 
 **Detection engines.** 802.11 frames carry three MAC fields — addr1 (receiver), addr2 (transmitter), addr3 (BSSID); several engines check all three so a target is caught in any role.
 
-- **Detector** — your watchlist (MACs, OUI prefixes, name patterns, 16-bit BLE service UUIDs) on BLE adverts and Wi-Fi promiscuous frames, plus six built-in signatures (off by default): Find My/AirTag (persistence-gated, anti-stalking), Flipper Zero (service UUIDs `0x3081`/`82`/`83`), Wi-Fi deauth/disassoc storms (rate-gated), directed probe SSIDs, Pwnagotchi, Meta glasses.
+- **Detector** — your watchlist (MACs, OUI prefixes, name patterns, 16-bit BLE service UUIDs) on BLE adverts and Wi-Fi promiscuous frames, plus seven built-in signatures (off by default): Find My/AirTag (persistence-gated, anti-stalking), Flipper Zero (service UUIDs `0x3081`/`82`/`83`), Wi-Fi deauth/disassoc storms (rate-gated), directed probe SSIDs, Pwnagotchi, Meta Ray-Ban / Oakley glasses (Luxottica CID `0x0D53`, service `0xFD5F`, or name — excludes Quest/Portal), Axon / law enforcement (OUI `00:25:DF`).
 - **Flock** — shared OUI table (`flock_oui.h`); a core set is always on, an extended set (broad chipset vendors) is off by default to avoid false positives. Wi-Fi runs promiscuous on 2.4 GHz **channels 1/6/11 only** (on the C5, plus non-DFS 5 GHz 36–48/149–165) with a wildcard probe per hop — a Flock camera on any other 2.4 channel will not be seen; BLE matches OUI, name (`Penguin`, `Flock`, `FS-`, `Pigvision`, …), manufacturer ID `0x09C8` (XUNTONG), and Raven GATT UUIDs. Post-March-2025 Penguin firmware dropped the `Penguin-` prefix and now advertises a bare 10-digit serial as its name; a bare 10-digit name is **not** standalone evidence (any device can advertise one) and only counts when the XUNTONG mfg ID corroborates it. Every predicate that hit rides along as a signal mask, and the app badges a detection **VALIDATED** when serial name + XUNTONG + TN serial are all present.
 - **Sky Spy** — Open Drone ID over BLE + Wi-Fi (NAN/beacon); decodes operator/UAV ID, position, altitude, speed, heading.
-- **Foxhunter** — one target MAC; buzzer cadence tracks RSSI across Wi-Fi and BLE.
+- **Foxhunter** — one target MAC; buzzer cadence tracks RSSI across Wi-Fi and BLE. Law-enforcement devices (Axon OUI `00:25:DF`) can't be foxhunted — the target is refused and the feed/detail buttons are hidden.
 - **UniPwn** — Unitree robots by BLE name prefix (`Go2_`, `G1_`, `H1_`, …): detect → connect → exploit.
 - **Wardrive** — logs every AP + BLE device (SSID, BSSID, channel, auth mode), GPS-stamped, WiGLE-compatible. Sweeps your configured 2.4 GHz range (default 1–14) — **every channel in range, not just 1/6/11**; on the C5 a config toggle (**All / 1·6·11**) picks whether 2.4 covers the full range or only 1/6/11, and it also sweeps the full 5 GHz set (UNII-1/2/2e/3, 36–165 incl DFS).
 
@@ -193,7 +194,7 @@ flutter build macos --release
 
 **Services:** [WiGLE](https://api.wigle.net) · [WDGWars](https://wdgwars.pl) · [CARTO](https://carto.com/basemaps/) / [OpenStreetMap](https://www.openstreetmap.org/) / [OpenTopoMap](https://opentopomap.org/) / [Stadia Maps](https://stadiamaps.com/) tiles · [Ringmast4r/OUI-Master-Database](https://github.com/Ringmast4r/OUI-Master-Database) vendor OUIs.
 
-**Standalone forks this unifies:** [Detector](https://github.com/colonelpanichacks/ouispy-detector) · [Foxhunter](https://github.com/colonelpanichacks/ouispy-foxhunter) · [Flock You](https://github.com/colonelpanichacks/flock-you) · [Sky-Spy](https://github.com/colonelpanichacks/Sky-Spy) · [Remote-ID-Spoofer](https://github.com/colonelpanichacks/Remote-ID-Spoofer) · [UniPwn](https://github.com/colonelpanichacks/Oui-Spy-UniPwn).
+**Standalone forks this unifies:** [Detector](https://github.com/colonelpanichacks/ouispy-detector) · [Foxhunter](https://github.com/colonelpanichacks/ouispy-foxhunter) · [Flock You](https://github.com/colonelpanichacks/flock-you) · [Sky-Spy](https://github.com/colonelpanichacks/Sky-Spy) · [UniPwn](https://github.com/colonelpanichacks/Oui-Spy-UniPwn).
 
 </details>
 

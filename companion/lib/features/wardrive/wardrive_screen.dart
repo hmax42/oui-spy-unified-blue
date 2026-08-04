@@ -48,7 +48,7 @@ class WardriveScreen extends ConsumerStatefulWidget {
 class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBindingObserver {
   final _mapController = MapController();
   bool _followMode = true;
-  String? _fittedSessionId;
+  int _lastSessionLoadEpoch = 0;
   bool _initialFitDone = false;
   bool _idleCenteredDone = false;
   bool _feedCollapsed = false;
@@ -62,9 +62,11 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   double _currentRotation = 0;
   double _povHeading = double.nan;
   _DetectionLayers? _cachedLayers;
+  Detection? _focusedDetection;
   String _cachedLayersKey = '';
   List<Geofence> _exclusionZones = [];
   bool _priming = false;
+  bool _reconnectPromptOpen = false;
 
   @override
   void initState() {
@@ -308,6 +310,41 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     );
   }
 
+  Future<void> _showReconnectPrompt(WardriveController wd) async {
+    final t = AppTheme.of(context);
+    final cont = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: t.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Connection Restored',
+          style: TextStyle(color: t.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+        content: Text(
+          'The node reconnected during a wardrive. Continue the session?',
+          style: TextStyle(color: t.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('STOP & SAVE', style: TextStyle(color: t.textDim)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('CONTINUE', style: TextStyle(color: AppTheme.accent)),
+          ),
+        ],
+      ),
+    );
+    _reconnectPromptOpen = false;
+    if (!mounted) return;
+    if (cont == true) {
+      await wd.continueAfterReconnect();
+    } else {
+      await wd.stopAfterReconnect();
+    }
+  }
+
   void _onMapReady() {
     if (_initialFitDone) return;
     final wd = ref.read(wardriveProvider);
@@ -400,10 +437,20 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     });
   }
 
+  /// Tapping a detection isolates it: the map drops every other pin until
+  /// the focus chip is cleared.
   void _zoomToDetection(Detection d) {
     if (!_hasMapCoord(d.latitude, d.longitude)) return;
+    setState(() {
+      _focusedDetection = d;
+      _followMode = false;
+    });
     _mapController.move(LatLng(d.latitude!, d.longitude!), 18);
-    if (_followMode) setState(() => _followMode = false);
+  }
+
+  void _clearFocusedDetection() {
+    if (_focusedDetection == null) return;
+    setState(() => _focusedDetection = null);
   }
 
   static bool _hasMapCoord(double? lat, double? lon) {
@@ -536,6 +583,16 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     final mapStyle = ref.watch(mapStyleProvider);
     final wt = ref.watch(wardriveThemeDataProvider);
     final wd = ref.watch(wardriveProvider);
+    if (wd.pendingReconnectPrompt && !_reconnectPromptOpen) {
+      _reconnectPromptOpen = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && wd.pendingReconnectPrompt) {
+          _showReconnectPrompt(wd);
+        } else {
+          _reconnectPromptOpen = false;
+        }
+      });
+    }
     final appEngines = ref.watch(appStateProvider);
     final gpsPos = ref.watch(gpsProvider).lastPosition;
     final selfPos = wd.currentPosition ?? gpsPos;
@@ -547,16 +604,17 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
 
     // Fit to session bounds when a saved session is loaded
     final loadedId = wd.loadedSessionId;
-    if (loadedId != null && loadedId != _fittedSessionId && wd.hasSessionData) {
-      _fittedSessionId = loadedId;
+    if (loadedId != null &&
+        wd.sessionLoadEpoch != _lastSessionLoadEpoch &&
+        wd.hasSessionData) {
+      _lastSessionLoadEpoch = wd.sessionLoadEpoch;
+      _focusedDetection = null;
       _followMode = false;
       _initialFitDone = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _fitToSessionBounds(wd);
       });
-    } else if (loadedId == null) {
-      _fittedSessionId = null;
     }
 
     if (!wd.isActive &&
@@ -574,7 +632,9 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     // Consume pending zoom target from cross-tab navigation
     if (wd.pendingZoomTarget != null) {
       final zoom = wd.consumeZoomTarget()!;
+      final focus = wd.consumeZoomDetection();
       _followMode = false;
+      _focusedDetection = focus;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _mapController.move(zoom, 18);
@@ -768,6 +828,16 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
               top: horizonY, left: 0, right: 0, bottom: 0,
               child: mapStack,
             ),
+            if (_focusedDetection != null)
+              Positioned(
+                top: horizonY + 8, left: 0, right: 0,
+                child: Center(
+                  child: _FocusedDetectionChip(
+                    detection: _focusedDetection!,
+                    onClear: _clearFocusedDetection,
+                  ),
+                ),
+              ),
             if (wt.synthwaveSky)
               Positioned(
                 top: horizonY - 28, left: 0, right: 0, height: 36,
@@ -1095,8 +1165,10 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
 
   _DetectionLayers _buildDetectionLayers(WardriveController wd, WardriveThemeData wt) {
     final recentLen = ref.read(appStateProvider).recentDetections.length;
+    final focus = _focusedDetection;
     final key = '${wd.dedupedDetections.length}|$recentLen|${wd.flockFilter}|'
-        '${wd.detectorFilter}|${_currentZoom.toStringAsFixed(1)}|${wd.sessionId}';
+        '${wd.detectorFilter}|${_currentZoom.toStringAsFixed(1)}|${wd.sessionId}|'
+        '${focus == null ? '' : '${focus.macAddress}|${focus.engine.name}'}';
     if (_cachedLayersKey == key && _cachedLayers != null) return _cachedLayers!;
     final layers = _computeDetectionLayers(wd, wt);
     _cachedLayers = layers;
@@ -1130,17 +1202,32 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
             d.latitude ?? droneRidPoint(d)!.latitude,
             d.longitude ?? droneRidPoint(d)!.longitude))
         .toList();
+    final focused = _focusedDetection;
     final filterActive = wd.flockFilter || wd.detectorFilter;
-    final geoDetections = filterActive
-        ? allGeo.where((d) {
-            if (wd.flockFilter &&
-                (d.engine == Engine.flockBle || d.engine == Engine.flockWifi)) {
-              return true;
-            }
-            if (wd.detectorFilter && d.engine == Engine.detector) return true;
-            return false;
-          }).toList()
-        : allGeo;
+    final List<Detection> geoDetections;
+    if (focused != null) {
+      final hits = allGeo
+          .where((d) =>
+              d.macAddress == focused.macAddress && d.engine == focused.engine)
+          .toList();
+      // The feed can focus a detection this session's map never held.
+      geoDetections = hits.isNotEmpty
+          ? hits
+          : (_hasMapCoord(focused.latitude, focused.longitude)
+              ? [focused]
+              : const <Detection>[]);
+    } else if (filterActive) {
+      geoDetections = allGeo.where((d) {
+        if (wd.flockFilter &&
+            (d.engine == Engine.flockBle || d.engine == Engine.flockWifi)) {
+          return true;
+        }
+        if (wd.detectorFilter && d.engine == Engine.detector) return true;
+        return false;
+      }).toList();
+    } else {
+      geoDetections = allGeo;
+    }
     if (geoDetections.isEmpty) return const _DetectionLayers.empty();
 
     final zoom = _currentZoom;
@@ -2179,6 +2266,64 @@ class _MapStyleButton extends StatelessWidget {
           border: Border.all(color: t.border),
         ),
         child: Icon(Icons.layers, size: 16, color: t.textSecondary),
+      ),
+    );
+  }
+}
+
+class _FocusedDetectionChip extends StatelessWidget {
+  const _FocusedDetectionChip({required this.detection, required this.onClear});
+  final Detection detection;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final name = detection.deviceName.isNotEmpty
+        ? detection.deviceName
+        : (detection.ssid.isNotEmpty ? detection.ssid : detection.macAddress);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onClear,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: t.surface.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: detection.engine.color.withValues(alpha: 0.6)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(detection.engine.icon, size: 12, color: detection.engine.color),
+              const SizedBox(width: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: Text(
+                  name,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: t.textPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('SHOW ALL',
+                  style: TextStyle(
+                    color: t.textDim,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  )),
+              const SizedBox(width: 4),
+              Icon(Icons.close, size: 12, color: t.textDim),
+            ],
+          ),
+        ),
       ),
     );
   }
